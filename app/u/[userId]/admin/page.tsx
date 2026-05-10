@@ -1,31 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
 import Papa from 'papaparse';
 
-export default function Admin() {
-  const params = useParams<{ userId: string }>();
-  const userId = params.userId;
+export default function Admin({ params }: { params: { userId: string } }) {
   const [adminKey, setAdminKey] = useState('');
   const [message, setMessage] = useState('');
-  const [csvText, setCsvText] = useState('code,name\n4012,\n3939,\n4286,');
+  const [csvText, setCsvText] = useState('code,name\n4012,アクシス\n3939,カナミックネットワーク\n4286,ＣＬホールディングス');
   const [loading, setLoading] = useState(false);
 
   async function upload() {
     setLoading(true);
-    setMessage('保存中...');
+    setMessage('');
     try {
       const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
       const res = await fetch('/api/watchlist/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, adminKey, rows: parsed.data }),
+        body: JSON.stringify({ userId: params.userId, adminKey, rows: parsed.data }),
       });
-      const data = await res.json();
-      setMessage(res.ok ? `保存しました: ${data.count}件` : `エラー: ${data.error}`);
-    } catch (e) {
-      setMessage(`エラー: ${String(e)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'upload failed');
+      setMessage(`登録完了: ${json.count}件`);
+    } catch (error) {
+      setMessage(`エラー: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
     }
@@ -34,19 +32,14 @@ export default function Admin() {
   return (
     <main className="wrap">
       <section className="section">
-        <h1>Watchlist管理: {userId}</h1>
-        <p>CSV形式: <code>code,name,memo</code></p>
-        <div className="grid">
-          <div>
-            <label>編集PIN</label>
-            <input className="input" value={adminKey} onChange={(e) => setAdminKey(e.target.value)} />
-          </div>
-          <div style={{ alignSelf: 'end' }}>
-            <button className="btn" onClick={upload} disabled={loading}>{loading ? '保存中...' : '保存'}</button>
-          </div>
-        </div>
-        <textarea rows={16} className="input" value={csvText} onChange={(e) => setCsvText(e.target.value)} />
-        <p>{message}</p>
+        <h1>{params.userId} CSV登録</h1>
+        <p>CSV形式: <code>code,name</code></p>
+        <label>管理キー</label>
+        <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="ADMIN_UPLOAD_KEY" />
+        <label>CSV</label>
+        <textarea value={csvText} onChange={(e) => setCsvText(e.target.value)} rows={14} />
+        <button className="btn" onClick={upload} disabled={loading}>{loading ? '登録中...' : '登録'}</button>
+        {message ? <p>{message}</p> : null}
       </section>
     </main>
   );
