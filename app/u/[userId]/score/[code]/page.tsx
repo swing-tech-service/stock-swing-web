@@ -186,8 +186,8 @@ function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'dai
         <tbody>
           <tr><th>判定</th><td><span className={`badge ${ok ? 'green' : 'gray'}`}>{ok ? `${title}` : '未達'}</span></td></tr>
           <tr><th>未達理由</th><td>{fmt(m[`${prefix}_sideways_reason`])}</td></tr>
-          <tr><th>横ばいレンジ上限</th><td>{fmt(m[`${prefix}_sideways_range_high`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_high_date`])}<br />{fmt(m[`${prefix}_sideways_range_high_reason`])}</td></tr>
-          <tr><th>横ばいレンジ下限</th><td>{fmt(m[`${prefix}_sideways_range_low`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_low_date`])}<br />{fmt(m[`${prefix}_sideways_range_low_reason`])}</td></tr>
+          <tr><th>横ばいレンジ最大値</th><td>{fmt(m[`${prefix}_sideways_range_max`] ?? m[`${prefix}_sideways_range_high`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_max_date`] ?? m[`${prefix}_sideways_range_high_date`])}<br />{fmt(m[`${prefix}_sideways_range_high_reason`])}</td></tr>
+          <tr><th>横ばいレンジ最小値</th><td>{fmt(m[`${prefix}_sideways_range_min`] ?? m[`${prefix}_sideways_range_low`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_min_date`] ?? m[`${prefix}_sideways_range_low_date`])}<br />{fmt(m[`${prefix}_sideways_range_low_reason`])}</td></tr>
           <tr><th>BB±2σ</th><td>+2σ {fmt(m[`${prefix}_sideways_bb_upper2`])} / -2σ {fmt(m[`${prefix}_sideways_bb_lower2`])}</td></tr>
           <tr><th>BB拡大</th><td>現在BB幅 {fmt(m[`${prefix}_sideways_bb_width`])} / {compareLabel} {fmt(m[`${prefix}_sideways_bb_width_compare`])} / {m[`${prefix}_sideways_bb_expanding`] ? '拡大' : '未拡大'}</td></tr>
           <tr><th>RSI</th><td>RSI {fmt(m[`${prefix}_sideways_rsi`])} / RSI傾き {fmt(m[`${prefix}_sideways_rsi_slope`])}</td></tr>
