@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseServer';
+import { supabaseAdmin } from '../../../../lib/supabaseServer';
 
 export async function GET(_req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
@@ -13,7 +13,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
     .limit(1);
 
   if (runs.error) return NextResponse.json({ error: runs.error.message }, { status: 500 });
-
   const run = runs.data?.[0];
   if (!run) return NextResponse.json({ run: null, rows: [] });
 
