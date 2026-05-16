@@ -109,9 +109,9 @@ function sortedScoredRows(rows: ResultRow[]) {
     .filter(isScoreCalculated)
     .slice()
     .sort((a, b) => {
-      const scoreDiff = Number(a.score ?? 9999) - Number(b.score ?? 9999);
+      const scoreDiff = Number(b.score ?? -9999) - Number(a.score ?? -9999);
       if (scoreDiff !== 0) return scoreDiff;
-      return Number(a.condition_count ?? 9999) - Number(b.condition_count ?? 9999);
+      return Number(b.condition_count ?? -9999) - Number(a.condition_count ?? -9999);
     });
 }
 
@@ -225,6 +225,12 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
               })}
             </tbody>
           </table>
+        </section>
+
+        <section className="section">
+          <h2>CSV登録・更新</h2>
+          <p>監視銘柄CSVを変更する場合は、管理画面から登録してください。登録後、管理画面の「スコア判定を更新」ボタンで分析を実行できます。</p>
+          <a className="btn" href={`/u/${userId}/admin`}>CSV登録・更新ページへ</a>
         </section>
       </main>
     </>

@@ -19,8 +19,10 @@ export default function Admin() {
 
   const [adminKey, setAdminKey] = useState('');
   const [message, setMessage] = useState('');
+  const [runMessage, setRunMessage] = useState('');
   const [csvText, setCsvText] = useState('code,name\n4012,アクシス\n3939,カナミックネットワーク\n4286,ＣＬホールディングス');
   const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
 
   async function upload() {
     setLoading(true);
@@ -37,11 +39,30 @@ export default function Admin() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'upload failed');
-      setMessage(`登録完了: ${json.count}件`);
+      setMessage(`登録完了: ${json.count}件。続けて「スコア判定を更新」を押してください。`);
     } catch (error) {
       setMessage(`エラー: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runAnalysis() {
+    setRunning(true);
+    setRunMessage('');
+    try {
+      const res = await fetch('/api/analysis/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, adminKey }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'workflow dispatch failed');
+      setRunMessage('更新を開始しました。数分後にダッシュボードを再読み込みしてください。');
+    } catch (error) {
+      setRunMessage(`エラー: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -54,8 +75,13 @@ export default function Admin() {
         <input value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="ADMIN_UPLOAD_KEY" />
         <label>CSV</label>
         <textarea value={csvText} onChange={(e) => setCsvText(e.target.value)} rows={14} />
-        <button className="btn" onClick={upload} disabled={loading || !userId}>{loading ? '登録中...' : '登録'}</button>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+          <button className="btn" onClick={upload} disabled={loading || !userId}>{loading ? '登録中...' : 'CSVを登録'}</button>
+          <button className="btn" onClick={runAnalysis} disabled={running || !userId}>{running ? '更新開始中...' : 'スコア判定を更新'}</button>
+          <a className="btn" href={`/u/${userId}`}>ダッシュボードへ戻る</a>
+        </div>
         {message ? <p>{message}</p> : null}
+        {runMessage ? <p>{runMessage}</p> : null}
       </section>
     </main>
   );
