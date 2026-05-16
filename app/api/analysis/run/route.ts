@@ -6,12 +6,18 @@ function normalizeKey(raw: unknown) {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  let body: any = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+
   const userId = String(body.userId || '').trim();
   const adminKey = normalizeKey(body.adminKey);
 
   if (!userId || !adminKey) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'unauthorized: userId/adminKey is required' }, { status: 401 });
   }
 
   const supabase = supabaseAdmin();
@@ -30,7 +36,7 @@ export async function POST(req: Request) {
 
   const expectedKey = normalizeKey(user.data.admin_key || process.env.ADMIN_UPLOAD_KEY || '');
   if (!expectedKey || adminKey !== expectedKey) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'unauthorized: admin key mismatch' }, { status: 401 });
   }
 
   const token = process.env.GITHUB_ACTIONS_TOKEN || process.env.GITHUB_TOKEN_FOR_DISPATCH;
@@ -40,10 +46,12 @@ export async function POST(req: Request) {
   const ref = process.env.GITHUB_REF || 'main';
 
   if (!token) {
-    return NextResponse.json({ error: 'GitHub workflow dispatch token is not configured' }, { status: 500 });
+    return NextResponse.json({ error: 'GITHUB_ACTIONS_TOKEN is not configured in Vercel' }, { status: 500 });
   }
 
   const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow}/dispatches`;
+  const payload = { ref, inputs: { user_id: userId } };
+
   const gh = await fetch(url, {
     method: 'POST',
     headers: {
@@ -51,14 +59,23 @@ export async function POST(req: Request) {
       'Authorization': `Bearer ${token}`,
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
+      'User-Agent': 'stock-swing-web',
     },
-    body: JSON.stringify({ ref, inputs: { user_id: userId } }),
+    body: JSON.stringify(payload),
   });
 
   if (!gh.ok) {
     const text = await gh.text();
-    return NextResponse.json({ error: `GitHub Actions dispatch failed: ${gh.status} ${text}` }, { status: 500 });
+    return NextResponse.json({
+      error: `GitHub Actions dispatch failed: ${gh.status} ${text}`,
+      request: { owner, repo, workflow, ref, userId },
+    }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, message: `${userId} のスコア判定更新を開始しました。数分後にダッシュボードを確認してください。` });
+  return NextResponse.json({
+    ok: true,
+    message: `${userId} のスコア判定更新を開始しました。GitHub Actions完了後にダッシュボードへ反映されます。`,
+    actionsUrl: `https://github.com/${owner}/${repo}/actions`,
+    request: { owner, repo, workflow, ref, userId },
+  });
 }

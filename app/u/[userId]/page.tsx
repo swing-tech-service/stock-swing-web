@@ -49,15 +49,6 @@ async function getData(userId: string) {
   return { run, rows };
 }
 
-function tagClass(t: string) {
-  if (['決算前除外'].includes(t)) return 'red';
-  if (['決算直前注意'].includes(t)) return 'orange';
-  if (['BBブレイク', 'BB拡大中'].includes(t)) return 'blue';
-  if (['小型株'].includes(t)) return 'green';
-  if (t.startsWith('決算日:')) return 'orange';
-  return 'gray';
-}
-
 function fmt(value: any, suffix = '') {
   if (value === null || value === undefined || value === '') return '-';
   return `${value}${suffix}`;
@@ -70,11 +61,10 @@ function formatJst(value: any) {
   return new Intl.DateTimeFormat('ja-JP', {
     timeZone: 'Asia/Tokyo',
     year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    month: 'numeric',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
     hour12: false,
   }).format(date) + ' JST';
 }
@@ -86,9 +76,7 @@ function formatMd(value: any) {
   if (m) return `${Number(m[2])}月${Number(m[3])}日`;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  const month = date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric' });
-  const day = date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', day: 'numeric' });
-  return `${month}${day}`;
+  return new Intl.DateTimeFormat('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric' }).format(date).replace('/', '月') + '日';
 }
 
 const HIDDEN_TAGS = new Set([
@@ -97,6 +85,15 @@ const HIDDEN_TAGS = new Set([
   '出来高OK', '出来高強い', '出来高不足', '出来高判定不可',
   '損切り許容内', '損切り遠い', '直近安値接近',
 ]);
+
+function tagClass(t: string) {
+  if (['決算前除外'].includes(t)) return 'red';
+  if (['決算直前注意'].includes(t)) return 'orange';
+  if (['BBブレイク', 'BB拡大中'].includes(t)) return 'blue';
+  if (['小型株'].includes(t)) return 'green';
+  if (t.startsWith('決算日:')) return 'orange';
+  return 'gray';
+}
 
 function visibleTags(row: ResultRow) {
   const tags = (row.tags || [])
@@ -111,46 +108,30 @@ function visibleTags(row: ResultRow) {
   return Array.from(new Set(tags));
 }
 
-function StockCard({ row, userId }: { row: ResultRow; userId: string }) {
-  const tags = visibleTags(row);
-  return (
-    <article className="stock-card">
-      <div className="stock-card-head">
-        <div>
-          <div className="code">{row.code}</div>
-          <div className="name">{row.name || ''}</div>
-        </div>
-        <div className="score-box">
-          <span>スコア</span>
-          <b>{fmt(row.score)}</b>
-        </div>
-      </div>
-      <div className="mini-grid simple">
-        <div><span>達成</span><b>{fmt(row.condition_count)}</b></div>
-        <div><span>現在値</span><b>{fmt(row.close)}</b></div>
-      </div>
-      <div className="tag-row">{tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</div>
-      <div className="action-row">
-        <Link className="btn" href={`/u/${userId}/score/${row.code}`}>スコア詳細</Link>
-        {row.kabutan_url ? <a className="btn" href={row.kabutan_url} target="_blank" rel="noreferrer">株探</a> : null}
-      </div>
-    </article>
-  );
+function kabutanUrl(row: ResultRow) {
+  return `https://kabutan.jp/stock/chart?code=${encodeURIComponent(String(row.code))}`;
 }
 
-function UnscoredCard({ row }: { row: ResultRow }) {
+function CompactRow({ row, userId, unscored = false }: { row: ResultRow; userId: string; unscored?: boolean }) {
   const tags = visibleTags(row);
   return (
-    <article className="stock-card muted-card simple-row">
-      <div className="stock-card-head">
-        <div>
-          <div className="code">{row.code}</div>
-          <div className="name">{row.name || ''}</div>
-        </div>
-        <div className="score-box"><span>判定</span><b>-</b></div>
+    <div className={`stock-line ${unscored ? 'unscored' : ''}`}>
+      <div className="line-main">
+        <span className="line-code">{row.code}</span>
+        <span className="line-name">{row.name || ''}</span>
       </div>
-      {tags.length ? <div className="tag-row">{tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</div> : null}
-    </article>
+      <div className="line-score">
+        <span>S</span><b>{unscored ? '-' : fmt(row.score)}</b>
+      </div>
+      {!unscored ? <div className="line-score compact"><span>達</span><b>{fmt(row.condition_count)}</b></div> : null}
+      <div className="line-tags">
+        {tags.slice(0, 3).map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}
+      </div>
+      <div className="line-actions">
+        {!unscored ? <Link className="mini-btn" href={`/u/${userId}/score/${row.code}`}>詳細</Link> : null}
+        <a className="mini-btn" href={kabutanUrl(row)} target="_blank" rel="noreferrer">株探</a>
+      </div>
+    </div>
   );
 }
 
@@ -174,41 +155,37 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
 
   return (
     <>
-      <header className="hero">
+      <header className="hero compact-hero">
         <div className="eyebrow">Premium Swing Screening</div>
-        <h1>{userId} ダッシュボード</h1>
+        <h1>{userId}</h1>
         <p className="meta">最終更新: {lastUpdated} / 毎日16:30 JST頃から更新開始（17:00までに反映目標）</p>
       </header>
-      <main className="wrap">
+      <main className="wrap compact-wrap">
         {errorMessage ? <div className="alert">エラー: {errorMessage}</div> : null}
-        <div className="cards">
-          <div className="card">監視銘柄<br /><b>{rows.length}</b></div>
-          <div className="card">スコア判定<br /><b>{scoredRows.length}</b></div>
+        <div className="cards compact-cards">
+          <div className="card">監視<br /><b>{rows.length}</b></div>
+          <div className="card">判定<br /><b>{scoredRows.length}</b></div>
           <div className="card">対象外<br /><b>{unscoredRows.length}</b></div>
-          <div className="card">BBブレイク<br /><b>{count('BBブレイク') + count('BBスクイーズブレイク')}</b></div>
-          <div className="card">決算直前注意<br /><b>{count('決算直前注意')}</b></div>
-          <div className="card">決算前除外<br /><b>{count('決算前除外')}</b></div>
+          <div className="card">BB<br /><b>{count('BBブレイク') + count('BBスクイーズブレイク')}</b></div>
+          <div className="card">決算注意<br /><b>{count('決算直前注意')}</b></div>
+          <div className="card">決算除外<br /><b>{count('決算前除外')}</b></div>
         </div>
 
-        <section className="section">
-          <h2>スコア判定銘柄</h2>
-          <p className="muted">出来高・ボラ条件を満たした銘柄を、スコアが高い順に表示します。</p>
+        <section className="section compact-section">
+          <div className="section-headline"><h2>スコア判定銘柄</h2><span>{scoredRows.length}件</span></div>
           {scoredRows.length === 0 ? <p>まだスコア判定銘柄がありません。</p> : (
-            <div className="stock-list">{scoredRows.map((r) => <StockCard row={r} userId={userId} key={r.id} />)}</div>
+            <div className="stock-lines">{scoredRows.map((r) => <CompactRow row={r} userId={userId} key={r.id} />)}</div>
           )}
         </section>
 
-        <section className="section">
-          <h2>スコア判定対象外</h2>
-          <p className="muted">出来高またはボラ条件を満たさない銘柄です。</p>
+        <section className="section compact-section">
+          <div className="section-headline"><h2>スコア判定対象外</h2><span>{unscoredRows.length}件</span></div>
           {unscoredRows.length === 0 ? <p>対象外銘柄はありません。</p> : (
-            <div className="stock-list">{unscoredRows.map((r) => <UnscoredCard row={r} key={r.id} />)}</div>
+            <div className="stock-lines">{unscoredRows.map((r) => <CompactRow row={r} userId={userId} key={r.id} unscored />)}</div>
           )}
         </section>
 
-        <section className="section" style={{ marginTop: 24 }}>
-          <h2>CSV登録・更新</h2>
-          <p>監視銘柄CSVを変更する場合は、下記の管理画面から更新してください。CSV更新後は管理画面の「スコア判定を更新」ボタンで再分析を開始できます。</p>
+        <section className="section compact-section footer-links">
           <Link className="btn" href={`/u/${userId}/admin`}>CSV更新ページへ</Link>
         </section>
       </main>

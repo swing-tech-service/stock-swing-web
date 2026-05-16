@@ -33,6 +33,7 @@ export default function Admin() {
 
   const [adminKey, setAdminKey] = useState('');
   const [message, setMessage] = useState('');
+  const [actionsUrl, setActionsUrl] = useState('');
   const [csvText, setCsvText] = useState('code,name\n');
   const [loading, setLoading] = useState(false);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
@@ -65,11 +66,10 @@ export default function Admin() {
   async function upload() {
     setLoading(true);
     setMessage('');
+    setActionsUrl('');
     try {
       const parsed = Papa.parse<CsvRow>(csvText, { header: true, skipEmptyLines: true });
-      if (parsed.errors.length > 0) {
-        throw new Error(parsed.errors[0]?.message || 'CSV parse error');
-      }
+      if (parsed.errors.length > 0) throw new Error(parsed.errors[0]?.message || 'CSV parse error');
       const res = await fetch('/api/watchlist/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,7 +88,8 @@ export default function Admin() {
 
   async function runScoreUpdate() {
     setUpdatingScore(true);
-    setMessage('');
+    setMessage('スコア判定更新をGitHub Actionsへ依頼しています...');
+    setActionsUrl('');
     try {
       const res = await fetch('/api/analysis/run', {
         method: 'POST',
@@ -98,6 +99,7 @@ export default function Admin() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'score update failed');
       setMessage(json.message || 'スコア判定更新を開始しました。数分後にダッシュボードを確認してください。');
+      if (json.actionsUrl) setActionsUrl(json.actionsUrl);
     } catch (error) {
       setMessage(`スコア判定更新エラー: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -109,7 +111,7 @@ export default function Admin() {
     <main className="wrap">
       <section className="section">
         <h1>{userId} CSV登録</h1>
-        <p>この画面では、ユーザごとの監視銘柄CSVを更新します。保存すると既存の有効リストはこのCSVで置き換わります。保存後、「スコア判定を更新」で分析バッチを開始できます。</p>
+        <p>ユーザごとの監視銘柄CSVを更新します。保存後、「スコア判定を更新」で分析バッチを開始できます。</p>
         <p>CSV形式: <code>code,name</code></p>
 
         <div className="grid">
@@ -127,11 +129,12 @@ export default function Admin() {
         <textarea className="input" value={csvText} onChange={(e) => setCsvText(e.target.value)} rows={18} />
         <div style={{ display: 'flex', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
           <button className="btn" onClick={upload} disabled={loading || !userId}>{loading ? '登録中...' : 'CSVを保存'}</button>
-          <button className="btn" type="button" onClick={runScoreUpdate} disabled={updatingScore || !userId || !adminKey}>{updatingScore ? '更新開始中...' : 'スコア判定を更新'}</button>
+          <button className="btn" type="button" onClick={runScoreUpdate} disabled={updatingScore || !userId || !adminKey}>{updatingScore ? '更新依頼中...' : 'スコア判定を更新'}</button>
           <button className="btn" type="button" onClick={loadCurrent} disabled={loadingCurrent}>現在の登録CSVを再読込</button>
           <a className="btn" href={`/u/${userId}`}>ダッシュボードへ</a>
         </div>
         {message ? <p>{message}</p> : null}
+        {actionsUrl ? <p><a href={actionsUrl} target="_blank" rel="noreferrer">GitHub Actionsの実行状況を確認</a></p> : null}
       </section>
     </main>
   );
