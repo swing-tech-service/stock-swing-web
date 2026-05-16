@@ -36,6 +36,7 @@ export default function Admin() {
   const [csvText, setCsvText] = useState('code,name\n');
   const [loading, setLoading] = useState(false);
   const [loadingCurrent, setLoadingCurrent] = useState(true);
+  const [updatingScore, setUpdatingScore] = useState(false);
   const [currentRows, setCurrentRows] = useState<WatchRow[]>([]);
 
   async function loadCurrent() {
@@ -76,7 +77,7 @@ export default function Admin() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'upload failed');
-      setMessage(`登録完了: ${json.count}件。core のGitHub Actionsを実行すると分析結果が更新されます。`);
+      setMessage(`登録完了: ${json.count}件。必要に応じて「スコア判定を更新」を押してください。`);
       await loadCurrent();
     } catch (error) {
       setMessage(`エラー: ${error instanceof Error ? error.message : String(error)}`);
@@ -85,11 +86,30 @@ export default function Admin() {
     }
   }
 
+  async function runScoreUpdate() {
+    setUpdatingScore(true);
+    setMessage('');
+    try {
+      const res = await fetch('/api/analysis/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, adminKey }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'score update failed');
+      setMessage(json.message || 'スコア判定更新を開始しました。数分後にダッシュボードを確認してください。');
+    } catch (error) {
+      setMessage(`スコア判定更新エラー: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setUpdatingScore(false);
+    }
+  }
+
   return (
     <main className="wrap">
       <section className="section">
         <h1>{userId} CSV登録</h1>
-        <p>この画面では、ユーザごとの監視銘柄CSVを更新します。保存すると既存の有効リストはこのCSVで置き換わります。</p>
+        <p>この画面では、ユーザごとの監視銘柄CSVを更新します。保存すると既存の有効リストはこのCSVで置き換わります。保存後、「スコア判定を更新」で分析バッチを開始できます。</p>
         <p>CSV形式: <code>code,name</code></p>
 
         <div className="grid">
@@ -107,6 +127,7 @@ export default function Admin() {
         <textarea className="input" value={csvText} onChange={(e) => setCsvText(e.target.value)} rows={18} />
         <div style={{ display: 'flex', gap: 12, marginTop: 14, flexWrap: 'wrap' }}>
           <button className="btn" onClick={upload} disabled={loading || !userId}>{loading ? '登録中...' : 'CSVを保存'}</button>
+          <button className="btn" type="button" onClick={runScoreUpdate} disabled={updatingScore || !userId || !adminKey}>{updatingScore ? '更新開始中...' : 'スコア判定を更新'}</button>
           <button className="btn" type="button" onClick={loadCurrent} disabled={loadingCurrent}>現在の登録CSVを再読込</button>
           <a className="btn" href={`/u/${userId}`}>ダッシュボードへ</a>
         </div>
