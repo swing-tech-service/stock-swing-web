@@ -172,6 +172,34 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
   ];
 }
 
+
+function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'daily' | 'weekly'; metrics: Record<string, any> | null | undefined }) {
+  const m = metrics || {};
+  const ok = !!m[`${prefix}_sideways_ok`];
+  const compareLabel = prefix === 'daily' ? '10営業日前BB幅' : '3週前BB幅';
+  const maLabel = prefix === 'daily' ? '日足20MA' : '週足13MA';
+  const closeLabel = prefix === 'daily' ? '日足終値' : '週足終値';
+  return (
+    <section className="section">
+      <h2>{title}</h2>
+      <table>
+        <tbody>
+          <tr><th>判定</th><td><span className={`badge ${ok ? 'green' : 'gray'}`}>{ok ? `${title}` : '未達'}</span></td></tr>
+          <tr><th>未達理由</th><td>{fmt(m[`${prefix}_sideways_reason`])}</td></tr>
+          <tr><th>横ばいレンジ上限</th><td>{fmt(m[`${prefix}_sideways_range_high`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_high_date`])}<br />{fmt(m[`${prefix}_sideways_range_high_reason`])}</td></tr>
+          <tr><th>横ばいレンジ下限</th><td>{fmt(m[`${prefix}_sideways_range_low`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_low_date`])}<br />{fmt(m[`${prefix}_sideways_range_low_reason`])}</td></tr>
+          <tr><th>BB±2σ</th><td>+2σ {fmt(m[`${prefix}_sideways_bb_upper2`])} / -2σ {fmt(m[`${prefix}_sideways_bb_lower2`])}</td></tr>
+          <tr><th>BB拡大</th><td>現在BB幅 {fmt(m[`${prefix}_sideways_bb_width`])} / {compareLabel} {fmt(m[`${prefix}_sideways_bb_width_compare`])} / {m[`${prefix}_sideways_bb_expanding`] ? '拡大' : '未拡大'}</td></tr>
+          <tr><th>RSI</th><td>RSI {fmt(m[`${prefix}_sideways_rsi`])} / RSI傾き {fmt(m[`${prefix}_sideways_rsi_slope`])}</td></tr>
+          <tr><th>{maLabel}</th><td>MA {fmt(m[`${prefix}_sideways_ma`])} / MA傾き {fmt(m[`${prefix}_sideways_ma_slope`])}</td></tr>
+          <tr><th>{closeLabel}</th><td>{fmt(m[`${prefix}_sideways_close`])} / 株価がMA以下: {m[`${prefix}_sideways_price_below_ma`] ? 'Yes' : 'No'}</td></tr>
+          <tr><th>全体平均出来高</th><td>{fmt(m[`${prefix}_sideways_volume_avg_all`])} / レンジ根拠は±3本平均出来高が3倍以上</td></tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 export default async function ScoreDetail({ params }: { params: Promise<{ userId: string; code: string }> }) {
   const { userId, code } = await params;
   let run: any = null;
@@ -227,6 +255,8 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
                 </tbody>
               </table>
             </section>
+            <SidewaysTable title="日足横ばい以上" prefix="daily" metrics={row.metrics} />
+            <SidewaysTable title="週足横ばい以上" prefix="weekly" metrics={row.metrics} />
             <section className="section">
               <h2>補助テクニカル・タグ理由</h2>
               <table>
