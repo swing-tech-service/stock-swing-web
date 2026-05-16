@@ -81,11 +81,14 @@ function formatJst(value: any) {
 
 function formatMd(value: any) {
   if (!value) return '';
+  const raw = String(value);
+  const m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${Number(m[2])}月${Number(m[3])}日`;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  const m = date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric' });
-  const d = date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', day: '2-digit' });
-  return `${m}/${d}`;
+  const month = date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric' });
+  const day = date.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', day: 'numeric' });
+  return `${month}${day}`;
 }
 
 const HIDDEN_TAGS = new Set([
@@ -108,10 +111,6 @@ function visibleTags(row: ResultRow) {
   return Array.from(new Set(tags));
 }
 
-function exclusionReason(row: ResultRow) {
-  return row.metrics?.score_exclusion_reason || row.metrics?.score_status || '出来高/ボラ条件未達';
-}
-
 function StockCard({ row, userId }: { row: ResultRow; userId: string }) {
   const tags = visibleTags(row);
   return (
@@ -126,9 +125,8 @@ function StockCard({ row, userId }: { row: ResultRow; userId: string }) {
           <b>{fmt(row.score)}</b>
         </div>
       </div>
-      <div className="mini-grid">
+      <div className="mini-grid simple">
         <div><span>達成</span><b>{fmt(row.condition_count)}</b></div>
-        <div><span>未達★</span><b>{fmt(row.failed_star_numbers)}</b></div>
         <div><span>現在値</span><b>{fmt(row.close)}</b></div>
       </div>
       <div className="tag-row">{tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</div>
@@ -143,7 +141,7 @@ function StockCard({ row, userId }: { row: ResultRow; userId: string }) {
 function UnscoredCard({ row }: { row: ResultRow }) {
   const tags = visibleTags(row);
   return (
-    <article className="stock-card muted-card">
+    <article className="stock-card muted-card simple-row">
       <div className="stock-card-head">
         <div>
           <div className="code">{row.code}</div>
@@ -151,13 +149,7 @@ function UnscoredCard({ row }: { row: ResultRow }) {
         </div>
         <div className="score-box"><span>判定</span><b>-</b></div>
       </div>
-      <div className="mini-grid">
-        <div><span>現在値</span><b>{fmt(row.close)}</b></div>
-        <div><span>6か月値幅</span><b>{fmt(row.metrics?.six_month_range_pct, '%')}</b></div>
-        <div><span>20日売買代金</span><b>{fmt(row.metrics?.avg_trading_value_20d)}</b></div>
-      </div>
-      <p className="reason">対象外理由: {exclusionReason(row)}</p>
-      <div className="tag-row">{tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</div>
+      {tags.length ? <div className="tag-row">{tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</div> : null}
     </article>
   );
 }
@@ -200,7 +192,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
 
         <section className="section">
           <h2>スコア判定銘柄</h2>
-          <p className="muted">出来高OK以上、かつボラOK以上の銘柄のみスコア判定しています。スコアが高い順に表示します。</p>
+          <p className="muted">出来高・ボラ条件を満たした銘柄を、スコアが高い順に表示します。</p>
           {scoredRows.length === 0 ? <p>まだスコア判定銘柄がありません。</p> : (
             <div className="stock-list">{scoredRows.map((r) => <StockCard row={r} userId={userId} key={r.id} />)}</div>
           )}
@@ -208,7 +200,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
 
         <section className="section">
           <h2>スコア判定対象外</h2>
-          <p className="muted">出来高またはボラティリティ条件を満たさない銘柄です。簡易一覧として表示します。</p>
+          <p className="muted">出来高またはボラ条件を満たさない銘柄です。</p>
           {unscoredRows.length === 0 ? <p>対象外銘柄はありません。</p> : (
             <div className="stock-list">{unscoredRows.map((r) => <UnscoredCard row={r} key={r.id} />)}</div>
           )}
