@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ref }),
+    body: JSON.stringify({ ref, inputs: { user_id: userId } }),
   });
 
   if (!gh.ok) {
@@ -60,5 +60,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `GitHub Actions dispatch failed: ${gh.status} ${text}` }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, message: 'スコア判定更新を開始しました。数分後にダッシュボードを確認してください。' });
+  return NextResponse.json({ ok: true, message: `${userId} のスコア判定更新を開始しました。数分後にダッシュボードを確認してください。` });
 }

@@ -34,6 +34,28 @@ function yn(v: any) {
   return v ? '達成' : '未達';
 }
 
+function formatJst(value: any) {
+  if (!value) return '未実行';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(date) + ' JST';
+}
+
+const HIDDEN_TAGS = new Set([
+  'TRADE READY', 'TRADEREADY', 'ボラOK', 'ボラ不足', 'ボラ判定不可',
+  '出来高OK', '出来高強い', '出来高不足', '出来高判定不可',
+  '損切り許容内', '損切り遠い', '直近安値接近',
+]);
+
+function visibleTags(row: ResultRow) {
+  return Array.from(new Set((row.tags || [])
+    .map((t) => t === 'BBスクイーズブレイク' ? 'BBブレイク' : t)
+    .filter((t) => !HIDDEN_TAGS.has(t))));
+}
+
 async function getLatestResult(userId: string, code: string) {
   const supabase = supabaseAdmin();
   const runs = await supabase
@@ -171,7 +193,7 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
       <header className="hero">
         <div className="eyebrow">Score Detail</div>
         <h1>{code} {row?.name || ''}</h1>
-        <p className="meta">{userId} / 最終更新: {run?.finished_at || run?.started_at || '未実行'}</p>
+        <p className="meta">{userId} / 最終更新: {formatJst(run?.finished_at || run?.started_at)}</p>
       </header>
       <main className="wrap">
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -209,7 +231,7 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
               <h2>補助テクニカル・タグ理由</h2>
               <table>
                 <tbody>
-                  <tr><th>タグ</th><td>{(row.tags || []).map((t) => <span className="badge gray" key={t}>{t}</span>)}</td></tr>
+                  <tr><th>タグ</th><td>{visibleTags(row).map((t) => <span className="badge gray" key={t}>{t}</span>)}</td></tr>
                   <tr><th>BB判定</th><td>{fmt(row.metrics?.daily_bb_position)} / {fmt(row.metrics?.daily_bb_width_percentile, '%順位')}</td></tr>
                   <tr><th>BB理由</th><td>{fmt(row.tag_reasons?.bb || row.metrics?.reason)}</td></tr>
                   <tr><th>6か月値幅</th><td>{fmt(row.metrics?.six_month_range_pct, '%')} / 高値 {fmt(row.metrics?.six_month_high)} / 安値 {fmt(row.metrics?.six_month_low)}</td></tr>

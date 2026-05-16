@@ -39,20 +39,22 @@ async function getData(userId: string) {
   const rows = ((results.data ?? []) as ResultRow[]).sort((a, b) => {
     const as = typeof a.score === 'number' && Number.isFinite(a.score) ? a.score : null;
     const bs = typeof b.score === 'number' && Number.isFinite(b.score) ? b.score : null;
-    if (as === null && bs === null) return String(a.code).localeCompare(String(b.code));
+    if (as === null && bs === null) return String(a.code).localeCompare(String(b.code), 'ja');
     if (as === null) return 1;
     if (bs === null) return -1;
-    return bs - as;
+    if (bs !== as) return bs - as;
+    return String(a.code).localeCompare(String(b.code), 'ja');
   });
 
   return { run, rows };
 }
 
 function tagClass(t: string) {
-  if (['決算前除外', '出来高不足', 'ボラ不足', '損切り遠い'].includes(t)) return 'red';
-  if (['決算直前注意', '直近安値接近'].includes(t)) return 'orange';
-  if (['BBスクイーズブレイク', 'BB拡大中'].includes(t)) return 'blue';
-  if (['小型株', '損切り許容内'].includes(t)) return 'green';
+  if (['決算前除外'].includes(t)) return 'red';
+  if (['決算直前注意'].includes(t)) return 'orange';
+  if (['BBブレイク', 'BB拡大中'].includes(t)) return 'blue';
+  if (['小型株'].includes(t)) return 'green';
+  if (t.startsWith('決算日:')) return 'orange';
   return 'gray';
 }
 
@@ -86,17 +88,78 @@ function formatMd(value: any) {
   return `${m}/${d}`;
 }
 
-const HIDDEN_TAGS = new Set(['TRADE READY', 'ボラOK', '出来高OK', '出来高強い']);
+const HIDDEN_TAGS = new Set([
+  'TRADE READY', 'TRADEREADY',
+  'ボラOK', 'ボラ不足', 'ボラ判定不可',
+  '出来高OK', '出来高強い', '出来高不足', '出来高判定不可',
+  '損切り許容内', '損切り遠い', '直近安値接近',
+]);
 
 function visibleTags(row: ResultRow) {
-  const tags = (row.tags || []).filter((t) => !HIDDEN_TAGS.has(t));
-  const earningsTag = row.tags?.find((t) => ['決算直前注意', '決算前除外'].includes(t));
+  const tags = (row.tags || [])
+    .map((t) => t === 'BBスクイーズブレイク' ? 'BBブレイク' : t)
+    .filter((t) => !HIDDEN_TAGS.has(t));
+
+  const earningsTag = tags.find((t) => ['決算直前注意', '決算前除外'].includes(t));
   const earningsDate = row.metrics?.next_earnings_date || row.metrics?.earnings_date;
   const md = formatMd(earningsDate);
-  if (earningsTag && md) {
-    tags.push(`決算日:${md}`);
-  }
+  if (earningsTag && md) tags.push(`決算日:${md}`);
+
   return Array.from(new Set(tags));
+}
+
+function exclusionReason(row: ResultRow) {
+  return row.metrics?.score_exclusion_reason || row.metrics?.score_status || '出来高/ボラ条件未達';
+}
+
+function StockCard({ row, userId }: { row: ResultRow; userId: string }) {
+  const tags = visibleTags(row);
+  return (
+    <article className="stock-card">
+      <div className="stock-card-head">
+        <div>
+          <div className="code">{row.code}</div>
+          <div className="name">{row.name || ''}</div>
+        </div>
+        <div className="score-box">
+          <span>スコア</span>
+          <b>{fmt(row.score)}</b>
+        </div>
+      </div>
+      <div className="mini-grid">
+        <div><span>達成</span><b>{fmt(row.condition_count)}</b></div>
+        <div><span>未達★</span><b>{fmt(row.failed_star_numbers)}</b></div>
+        <div><span>現在値</span><b>{fmt(row.close)}</b></div>
+      </div>
+      <div className="tag-row">{tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</div>
+      <div className="action-row">
+        <Link className="btn" href={`/u/${userId}/score/${row.code}`}>スコア詳細</Link>
+        {row.kabutan_url ? <a className="btn" href={row.kabutan_url} target="_blank" rel="noreferrer">株探</a> : null}
+      </div>
+    </article>
+  );
+}
+
+function UnscoredCard({ row }: { row: ResultRow }) {
+  const tags = visibleTags(row);
+  return (
+    <article className="stock-card muted-card">
+      <div className="stock-card-head">
+        <div>
+          <div className="code">{row.code}</div>
+          <div className="name">{row.name || ''}</div>
+        </div>
+        <div className="score-box"><span>判定</span><b>-</b></div>
+      </div>
+      <div className="mini-grid">
+        <div><span>現在値</span><b>{fmt(row.close)}</b></div>
+        <div><span>6か月値幅</span><b>{fmt(row.metrics?.six_month_range_pct, '%')}</b></div>
+        <div><span>20日売買代金</span><b>{fmt(row.metrics?.avg_trading_value_20d)}</b></div>
+      </div>
+      <p className="reason">対象外理由: {exclusionReason(row)}</p>
+      <div className="tag-row">{tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</div>
+    </article>
+  );
 }
 
 export default async function Dashboard({ params }: { params: Promise<{ userId: string }> }) {
@@ -112,6 +175,8 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
   }
 
   const rows = data.rows || [];
+  const scoredRows = rows.filter((r) => typeof r.score === 'number' && Number.isFinite(r.score));
+  const unscoredRows = rows.filter((r) => !(typeof r.score === 'number' && Number.isFinite(r.score)));
   const count = (tag: string) => rows.filter((r) => (r.tags || []).includes(tag)).length;
   const lastUpdated = formatJst(data.run?.finished_at || data.run?.started_at);
 
@@ -120,43 +185,35 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
       <header className="hero">
         <div className="eyebrow">Premium Swing Screening</div>
         <h1>{userId} ダッシュボード</h1>
-        <p className="meta">最終更新: {lastUpdated} / 毎日17:00 JST頃更新（16:30頃から処理開始）</p>
+        <p className="meta">最終更新: {lastUpdated} / 毎日16:30 JST頃から更新開始（17:00までに反映目標）</p>
       </header>
       <main className="wrap">
         {errorMessage ? <div className="alert">エラー: {errorMessage}</div> : null}
         <div className="cards">
           <div className="card">監視銘柄<br /><b>{rows.length}</b></div>
-          <div className="card">BBスクイーズ<br /><b>{count('BBスクイーズブレイク')}</b></div>
+          <div className="card">スコア判定<br /><b>{scoredRows.length}</b></div>
+          <div className="card">対象外<br /><b>{unscoredRows.length}</b></div>
+          <div className="card">BBブレイク<br /><b>{count('BBブレイク') + count('BBスクイーズブレイク')}</b></div>
           <div className="card">決算直前注意<br /><b>{count('決算直前注意')}</b></div>
           <div className="card">決算前除外<br /><b>{count('決算前除外')}</b></div>
-          <div className="card">対象外/未判定<br /><b>{rows.filter((r) => typeof r.score !== 'number').length}</b></div>
         </div>
+
         <section className="section">
-          <table>
-            <thead>
-              <tr>
-                <th>コード</th><th>銘柄名</th><th>スコア</th><th>達成</th><th>未達★</th><th>タグ</th><th>現在値</th><th>詳細</th><th>株探</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr><td colSpan={9}>まだ分析結果がありません。CSV登録後、core のGitHub Actionsを実行してください。</td></tr>
-              ) : rows.map((r) => (
-                <tr key={r.id}>
-                  <td><b>{r.code}</b></td>
-                  <td>{r.name || ''}</td>
-                  <td>{fmt(r.score)}</td>
-                  <td>{fmt(r.condition_count)}</td>
-                  <td>{fmt(r.failed_star_numbers)}</td>
-                  <td>{visibleTags(r).map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}</td>
-                  <td>{fmt(r.close)}</td>
-                  <td><Link className="btn" href={`/u/${userId}/score/${r.code}`}>スコア詳細</Link></td>
-                  <td>{r.kabutan_url ? <a className="btn" href={r.kabutan_url} target="_blank" rel="noreferrer">株探</a> : '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h2>スコア判定銘柄</h2>
+          <p className="muted">出来高OK以上、かつボラOK以上の銘柄のみスコア判定しています。スコアが高い順に表示します。</p>
+          {scoredRows.length === 0 ? <p>まだスコア判定銘柄がありません。</p> : (
+            <div className="stock-list">{scoredRows.map((r) => <StockCard row={r} userId={userId} key={r.id} />)}</div>
+          )}
         </section>
+
+        <section className="section">
+          <h2>スコア判定対象外</h2>
+          <p className="muted">出来高またはボラティリティ条件を満たさない銘柄です。簡易一覧として表示します。</p>
+          {unscoredRows.length === 0 ? <p>対象外銘柄はありません。</p> : (
+            <div className="stock-list">{unscoredRows.map((r) => <UnscoredCard row={r} key={r.id} />)}</div>
+          )}
+        </section>
+
         <section className="section" style={{ marginTop: 24 }}>
           <h2>CSV登録・更新</h2>
           <p>監視銘柄CSVを変更する場合は、下記の管理画面から更新してください。CSV更新後は管理画面の「スコア判定を更新」ボタンで再分析を開始できます。</p>
