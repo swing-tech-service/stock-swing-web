@@ -89,7 +89,10 @@ const HIDDEN_TAGS = new Set([
 function tagClass(t: string) {
   if (['決算前除外'].includes(t)) return 'red';
   if (['決算直前注意'].includes(t)) return 'orange';
-  if (['BBブレイク', 'BB拡大中'].includes(t)) return 'blue';
+  if (['BBブレイク'].includes(t)) return 'blue';
+  if (t.includes('BB横ばいレンジ')) return 'blue';
+  if (t.includes('RSI横ばいレンジ')) return 'orange';
+  if (t.includes('MA横ばいレンジ')) return 'purple';
   if (['小型株'].includes(t)) return 'green';
   if (t.startsWith('決算日:')) return 'orange';
   if (t.includes('レンジ最大')) return 'purple';
@@ -127,6 +130,17 @@ function visibleTags(row: ResultRow) {
 
   if (m.daily_sideways_range_in === true || m.daily_sideways_range_in_tag) tags.push('日足レンジ内');
   if (m.weekly_sideways_range_in === true || m.weekly_sideways_range_in_tag) tags.push('週足レンジ内');
+
+  for (const t of [
+    m.daily_sideways_bb_range_tag,
+    m.daily_sideways_rsi_range_tag,
+    m.daily_sideways_ma_range_tag,
+    m.weekly_sideways_bb_range_tag,
+    m.weekly_sideways_rsi_range_tag,
+    m.weekly_sideways_ma_range_tag,
+  ]) {
+    if (t) tags.push(String(t));
+  }
 
   const earningsTag = tags.find((t) => ['決算直前注意', '決算前除外'].includes(t));
   const earningsDate = row.metrics?.next_earnings_date || row.metrics?.earnings_date;

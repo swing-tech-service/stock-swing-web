@@ -176,21 +176,22 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
 function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'daily' | 'weekly'; metrics: Record<string, any> | null | undefined }) {
   const m = metrics || {};
   const ok = !!m[`${prefix}_sideways_ok`];
-  const compareLabel = prefix === 'daily' ? '10営業日前BB幅' : '3週前BB幅';
-  const maLabel = prefix === 'daily' ? '日足20MA' : '週足13MA';
+  const compareLabel = prefix === 'daily' ? '10営業日前BB2σ幅/終値' : '3週前BB2σ幅/終値';
+  const maLabel = prefix === 'daily' ? '日足5MA' : '週足13MA';
   const closeLabel = prefix === 'daily' ? '日足終値' : '週足終値';
   return (
     <section className="section">
       <h2>{title}</h2>
       <table>
         <tbody>
-          <tr><th>判定</th><td><span className={`badge ${ok ? 'green' : 'gray'}`}>{ok ? `${title}` : '未達'}</span></td></tr>
+          <tr><th>判定</th><td><span className={`badge ${ok ? 'green' : 'gray'}`}>{fmt(m[`${prefix}_sideways_tag`])}</span></td></tr>
           <tr><th>未達理由</th><td>{fmt(m[`${prefix}_sideways_reason`])}</td></tr>
           <tr><th>横ばいレンジ最大値</th><td>{fmt(m[`${prefix}_sideways_range_max`] ?? m[`${prefix}_sideways_range_high`])} / 基準日 {fmt(m[`${prefix}_sideways_range_max_date`] ?? m[`${prefix}_sideways_range_high_date`])}<br />{fmt(m[`${prefix}_sideways_range_high_reason`])}</td></tr>
           <tr><th>横ばいレンジ最小値</th><td>{fmt(m[`${prefix}_sideways_range_min`] ?? m[`${prefix}_sideways_range_low`])} / 基準日 {fmt(m[`${prefix}_sideways_range_min_date`] ?? m[`${prefix}_sideways_range_low_date`])}<br />{fmt(m[`${prefix}_sideways_range_low_reason`])}</td></tr>
           <tr><th>現在値のレンジ内判定</th><td>{m[`${prefix}_sideways_range_in`] ? 'レンジ内' : 'レンジ外'} / 終値 {fmt(m[`${prefix}_sideways_close`])}</td></tr>
+          <tr><th>横ばいレンジタグ</th><td>{[m[`${prefix}_sideways_bb_range_tag`], m[`${prefix}_sideways_rsi_range_tag`], m[`${prefix}_sideways_ma_range_tag`]].filter(Boolean).join(' / ') || '-'}</td></tr>
           <tr><th>BB±2σ</th><td>+2σ {fmt(m[`${prefix}_sideways_bb_upper2`])} / -2σ {fmt(m[`${prefix}_sideways_bb_lower2`])}</td></tr>
-          <tr><th>BB拡大</th><td>現在BB幅 {fmt(m[`${prefix}_sideways_bb_width`])} / {compareLabel} {fmt(m[`${prefix}_sideways_bb_width_compare`])} / {m[`${prefix}_sideways_bb_expanding`] ? '拡大' : '未拡大'}</td></tr>
+          <tr><th>BBブレイク</th><td>現在BB2σ幅/終値 {fmt(m[`${prefix}_sideways_bb_width`], '%')} / {compareLabel} {fmt(m[`${prefix}_sideways_bb_width_compare`], '%')}<br />{fmt(m[`${prefix}_sideways_bb_breakout_reason`])}</td></tr>
           <tr><th>RSI</th><td>RSI {fmt(m[`${prefix}_sideways_rsi`])} / RSI傾き {fmt(m[`${prefix}_sideways_rsi_slope`])}</td></tr>
           <tr><th>{maLabel}</th><td>MA {fmt(m[`${prefix}_sideways_ma`])} / MA傾き {fmt(m[`${prefix}_sideways_ma_slope`])}</td></tr>
           <tr><th>{closeLabel}</th><td>{fmt(m[`${prefix}_sideways_close`])} / 株価がMA以下: {m[`${prefix}_sideways_price_below_ma`] ? 'Yes' : 'No'}</td></tr>
