@@ -169,6 +169,12 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
       actual: `週足終値 ${fmt(m.weekly_close)} / 週足雲上限 ${fmt(m.weekly_ichimoku_cloud_upper)}`,
       ng: '週足終値が週足雲上限を上回っていません。',
     },
+    {
+      no: '⑮', star: true, title: '週足13MAサポート/上向き条件', ok: !!c.c15,
+      criterion: '週足終値 < 13週MA または 13週MA傾き >= 0',
+      actual: `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)} / 13MA傾き ${fmt(m.weekly_sma13_slope)}`,
+      ng: '週足終値が13週MAより下ではなく、かつ13週MAも上向きではありません。',
+    },
   ];
 }
 
@@ -242,7 +248,7 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
               <div className="card">現在値<br /><b>{fmt(row.close)}</b></div>
             </div>
             <section className="section">
-              <h2>14条件の達成状況</h2>
+              <h2>15条件の達成状況</h2>
               <table>
                 <thead><tr><th>No</th><th>結果</th><th>条件</th><th>判定基準</th><th>現在値・指標</th><th>未達の場合の見方</th></tr></thead>
                 <tbody>

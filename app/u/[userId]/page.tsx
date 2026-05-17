@@ -382,7 +382,6 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
             {(marketEnv?.indices || []).length ? (marketEnv?.indices || []).map((item) => <IndexCard key={item.key || item.ticker} item={item} />) : (
               <>
                 <div className="index-card"><div className="index-head"><b>日経平均</b><span>^N225</span></div><p className="index-error">市況データ未取得</p></div>
-                <div className="index-card"><div className="index-head"><b>TOPIX</b><span>^TOPX</span></div><p className="index-error">市況データ未取得</p></div>
                 <div className="index-card"><div className="index-head"><b>グロース250参考</b><span>2516.T</span></div><p className="index-error">市況データ未取得</p></div>
               </>
             )}
