@@ -14,6 +14,43 @@ type ResultRow = {
   kabutan_url: string | null;
 };
 
+
+
+type MarketIndex = {
+  key: string;
+  label: string;
+  ticker: string;
+  weight?: number | null;
+  date?: string;
+  close?: number | null;
+  prev_close?: number | null;
+  diff?: number | null;
+  diff_pct?: number | null;
+  ma5?: number | null;
+  ma25?: number | null;
+  ma5_gt_ma25?: boolean;
+  close_gt_ma25?: boolean;
+  rsi14?: number | null;
+  macd?: number | null;
+  macd_signal?: number | null;
+  macd_gt_signal?: boolean;
+  slow_k?: number | null;
+  slow_d?: number | null;
+  stoch_k_gt_d?: boolean;
+  stoch_cross?: string;
+  tone?: string;
+  reasons?: string[];
+  error?: string;
+};
+
+type MarketEnv = {
+  label?: string;
+  stars?: string;
+  comment?: string;
+  note?: string;
+  indices?: MarketIndex[];
+};
+
 type StatusKey = 'WATCH_PRIORITY' | 'BREAKOUT_WATCH' | 'REVERSAL_WAIT' | 'EARNINGS_CAUTION' | 'EARNINGS_EXCLUDE' | 'OUT_OF_SCOPE' | 'WATCH_LIST';
 
 const STATUS_LABEL: Record<StatusKey, string> = {
@@ -48,17 +85,22 @@ async function getData(userId: string) {
 
   if (results.error) throw new Error(results.error.message);
 
-  const rows = ((results.data ?? []) as ResultRow[]).sort((a, b) => {
-    const as = typeof a.score === 'number' && Number.isFinite(a.score) ? a.score : null;
-    const bs = typeof b.score === 'number' && Number.isFinite(b.score) ? b.score : null;
-    if (as === null && bs === null) return String(a.code).localeCompare(String(b.code), 'ja');
-    if (as === null) return 1;
-    if (bs === null) return -1;
-    if (bs !== as) return bs - as;
-    return String(a.code).localeCompare(String(b.code), 'ja');
-  });
+  const allRows = ((results.data ?? []) as ResultRow[]);
+  const marketRow = allRows.find((r) => r.code === '__MARKET_ENV__' || (r.tags || []).includes('MARKET_ENV'));
+  const marketEnv = marketRow?.metrics?.market_environment as MarketEnv | undefined;
+  const rows = allRows
+    .filter((r) => r.code !== '__MARKET_ENV__' && !(r.tags || []).includes('MARKET_ENV'))
+    .sort((a, b) => {
+      const as = typeof a.score === 'number' && Number.isFinite(a.score) ? a.score : null;
+      const bs = typeof b.score === 'number' && Number.isFinite(b.score) ? b.score : null;
+      if (as === null && bs === null) return String(a.code).localeCompare(String(b.code), 'ja');
+      if (as === null) return 1;
+      if (bs === null) return -1;
+      if (bs !== as) return bs - as;
+      return String(a.code).localeCompare(String(b.code), 'ja');
+    });
 
-  return { run, rows };
+  return { run, rows, marketEnv };
 }
 
 function fmt(value: any, suffix = '') {
@@ -213,6 +255,45 @@ function marketTone(rows: ResultRow[]) {
   return { label: '慎重', stars: '★☆☆☆☆', comment: '出来高・ボラ条件を満たす銘柄が少なめです。新規監視は慎重に確認してください。' };
 }
 
+
+function signed(value: any, suffix = '') {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toLocaleString('ja-JP')}${suffix}`;
+}
+
+function boolLabel(value: any) {
+  return value ? '○' : '×';
+}
+
+function IndexCard({ item }: { item: MarketIndex }) {
+  const diffClass = Number(item.diff || 0) >= 0 ? 'up' : 'down';
+  return (
+    <div className="index-card">
+      <div className="index-head"><b>{item.label}</b><span>{item.ticker}</span></div>
+      {item.close === null || item.close === undefined ? (
+        <p className="index-error">取得不可: {item.error || '-'}</p>
+      ) : (
+        <>
+          <div className="index-price">{Number(item.close).toLocaleString('ja-JP')}</div>
+          <div className={`index-diff ${diffClass}`}>{signed(item.diff)} / {signed(item.diff_pct, '%')}</div>
+          <div className="index-date">取得日: {item.date || '-'}</div>
+          <div className="index-mini">
+            <span>5MA&gt;25MA {boolLabel(item.ma5_gt_ma25)}</span>
+            <span>終値&gt;25MA {boolLabel(item.close_gt_ma25)}</span>
+            <span>RSI {fmt(item.rsi14)}</span>
+            <span>MACD {item.macd_gt_signal ? '良好' : '弱め'}</span>
+            <span>％K {fmt(item.slow_k)} / ％D {fmt(item.slow_d)}</span>
+            <span>{item.stoch_cross || '-'}</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function StatusPill({ status }: { status: StatusKey }) {
   return <span className={`status-pill status-${status}`}>{STATUS_LABEL[status]}</span>;
 }
@@ -257,19 +338,21 @@ function Section({ title, subtitle, rows, userId }: { title: string; subtitle: s
 
 export default async function Dashboard({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
-  let data: { run: any; rows: ResultRow[] };
+  let data: { run: any; rows: ResultRow[]; marketEnv?: MarketEnv };
   let errorMessage = '';
 
   try {
     data = await getData(userId);
   } catch (error) {
-    data = { run: null, rows: [] };
+    data = { run: null, rows: [], marketEnv: undefined };
     errorMessage = error instanceof Error ? error.message : String(error);
   }
 
   const rows = data.rows || [];
   const lastUpdated = formatJst(data.run?.finished_at || data.run?.started_at);
-  const tone = marketTone(rows);
+  const fallbackTone = marketTone(rows);
+  const marketEnv = data.marketEnv;
+  const tone = marketEnv?.label ? { label: marketEnv.label, stars: marketEnv.stars || fallbackTone.stars, comment: marketEnv.comment || fallbackTone.comment } : fallbackTone;
   const byStatus = (s: StatusKey) => rows.filter((r) => statusOf(r) === s);
   const scoredRows = rows.filter(isScored);
   const outRows = byStatus('OUT_OF_SCOPE');
@@ -288,14 +371,23 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
       <main className="wrap premium-wrap">
         {errorMessage ? <div className="alert">エラー: {errorMessage}</div> : null}
 
-        <section className="market-panel">
-          <div>
+        <section className="market-panel market-panel-v2">
+          <div className="market-main">
             <span className="panel-label">市場環境メーター</span>
             <h2>{tone.label} <em>{tone.stars}</em></h2>
             <p>{tone.comment}</p>
-            <small>主要指数連携前のv1では、監視銘柄全体のスコア分布・BBブレイク・決算リスクをもとに判定しています。</small>
+            <small>{marketEnv?.note || '市況データ未取得時は、監視銘柄全体のスコア分布・BBブレイク・決算リスクをもとに暫定判定します。'}</small>
           </div>
-          <div className="market-grid">
+          <div className="index-grid">
+            {(marketEnv?.indices || []).length ? (marketEnv?.indices || []).map((item) => <IndexCard key={item.key || item.ticker} item={item} />) : (
+              <>
+                <div className="index-card"><div className="index-head"><b>日経平均</b><span>^N225</span></div><p className="index-error">市況データ未取得</p></div>
+                <div className="index-card"><div className="index-head"><b>TOPIX</b><span>^TOPX</span></div><p className="index-error">市況データ未取得</p></div>
+                <div className="index-card"><div className="index-head"><b>グロース250参考</b><span>2516.T</span></div><p className="index-error">市況データ未取得</p></div>
+              </>
+            )}
+          </div>
+          <div className="market-grid compact-market-grid">
             <div><span>監視銘柄</span><b>{rows.length}</b></div>
             <div><span>スコア判定</span><b>{scoredRows.length}</b></div>
             <div><span>BBブレイク</span><b>{bbCount}</b></div>
