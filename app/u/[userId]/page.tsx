@@ -98,10 +98,35 @@ function tagClass(t: string) {
   return 'gray';
 }
 
+function rangeTag(label: string, kind: string, value: any, date: any) {
+  if (value === null || value === undefined || value === '') return '';
+  const md = formatMd(date);
+  const price = typeof value === 'number'
+    ? new Intl.NumberFormat('ja-JP', { maximumFractionDigits: value >= 1000 ? 0 : 1 }).format(value)
+    : String(value);
+  return md ? `${label}レンジ${kind}:${md} ${price}` : `${label}レンジ${kind}:${price}`;
+}
+
 function visibleTags(row: ResultRow) {
   const tags = (row.tags || [])
     .map((t) => t === 'BBスクイーズブレイク' ? 'BBブレイク' : t)
     .filter((t) => !HIDDEN_TAGS.has(t));
+
+  const m = row.metrics || {};
+
+  // 横ばいレンジタグは、DBのtags配列に入っていない古い分析結果でも、metricsから必ず作って表示する。
+  // 最大値/最小値が取れている場合は、条件達成 여부に関係なく表示する。
+  const dailyMax = rangeTag('日足', '最大', m.daily_sideways_range_max ?? m.daily_sideways_range_high, m.daily_sideways_range_max_date ?? m.daily_sideways_range_high_date);
+  const dailyMin = rangeTag('日足', '最小', m.daily_sideways_range_min ?? m.daily_sideways_range_low, m.daily_sideways_range_min_date ?? m.daily_sideways_range_low_date);
+  const weeklyMax = rangeTag('週足', '最大', m.weekly_sideways_range_max ?? m.weekly_sideways_range_high, m.weekly_sideways_range_max_date ?? m.weekly_sideways_range_high_date);
+  const weeklyMin = rangeTag('週足', '最小', m.weekly_sideways_range_min ?? m.weekly_sideways_range_low, m.weekly_sideways_range_min_date ?? m.weekly_sideways_range_low_date);
+
+  for (const t of [dailyMax, dailyMin, weeklyMax, weeklyMin]) {
+    if (t) tags.push(t);
+  }
+
+  if (m.daily_sideways_range_in === true || m.daily_sideways_range_in_tag) tags.push('日足レンジ内');
+  if (m.weekly_sideways_range_in === true || m.weekly_sideways_range_in_tag) tags.push('週足レンジ内');
 
   const earningsTag = tags.find((t) => ['決算直前注意', '決算前除外'].includes(t));
   const earningsDate = row.metrics?.next_earnings_date || row.metrics?.earnings_date;
