@@ -186,14 +186,17 @@ function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'dai
         <tbody>
           <tr><th>判定</th><td><span className={`badge ${ok ? 'green' : 'gray'}`}>{ok ? `${title}` : '未達'}</span></td></tr>
           <tr><th>未達理由</th><td>{fmt(m[`${prefix}_sideways_reason`])}</td></tr>
-          <tr><th>横ばいレンジ最大値</th><td>{fmt(m[`${prefix}_sideways_range_max`] ?? m[`${prefix}_sideways_range_high`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_max_date`] ?? m[`${prefix}_sideways_range_high_date`])}<br />{fmt(m[`${prefix}_sideways_range_high_reason`])}</td></tr>
-          <tr><th>横ばいレンジ最小値</th><td>{fmt(m[`${prefix}_sideways_range_min`] ?? m[`${prefix}_sideways_range_low`])} / 根拠日 {fmt(m[`${prefix}_sideways_range_min_date`] ?? m[`${prefix}_sideways_range_low_date`])}<br />{fmt(m[`${prefix}_sideways_range_low_reason`])}</td></tr>
+          <tr><th>横ばいレンジ最大値</th><td>{fmt(m[`${prefix}_sideways_range_max`] ?? m[`${prefix}_sideways_range_high`])} / 基準日 {fmt(m[`${prefix}_sideways_range_max_date`] ?? m[`${prefix}_sideways_range_high_date`])}<br />{fmt(m[`${prefix}_sideways_range_high_reason`])}</td></tr>
+          <tr><th>横ばいレンジ最小値</th><td>{fmt(m[`${prefix}_sideways_range_min`] ?? m[`${prefix}_sideways_range_low`])} / 基準日 {fmt(m[`${prefix}_sideways_range_min_date`] ?? m[`${prefix}_sideways_range_low_date`])}<br />{fmt(m[`${prefix}_sideways_range_low_reason`])}</td></tr>
+          <tr><th>現在値のレンジ内判定</th><td>{m[`${prefix}_sideways_range_in`] ? 'レンジ内' : 'レンジ外'} / 終値 {fmt(m[`${prefix}_sideways_close`])}</td></tr>
           <tr><th>BB±2σ</th><td>+2σ {fmt(m[`${prefix}_sideways_bb_upper2`])} / -2σ {fmt(m[`${prefix}_sideways_bb_lower2`])}</td></tr>
           <tr><th>BB拡大</th><td>現在BB幅 {fmt(m[`${prefix}_sideways_bb_width`])} / {compareLabel} {fmt(m[`${prefix}_sideways_bb_width_compare`])} / {m[`${prefix}_sideways_bb_expanding`] ? '拡大' : '未拡大'}</td></tr>
           <tr><th>RSI</th><td>RSI {fmt(m[`${prefix}_sideways_rsi`])} / RSI傾き {fmt(m[`${prefix}_sideways_rsi_slope`])}</td></tr>
           <tr><th>{maLabel}</th><td>MA {fmt(m[`${prefix}_sideways_ma`])} / MA傾き {fmt(m[`${prefix}_sideways_ma_slope`])}</td></tr>
           <tr><th>{closeLabel}</th><td>{fmt(m[`${prefix}_sideways_close`])} / 株価がMA以下: {m[`${prefix}_sideways_price_below_ma`] ? 'Yes' : 'No'}</td></tr>
-          <tr><th>全体平均出来高</th><td>{fmt(m[`${prefix}_sideways_volume_avg_all`])} / レンジ根拠は±3本平均出来高が3倍以上</td></tr>
+          <tr><th>出来高基準</th><td>{fmt(m[`${prefix}_sideways_volume_reference_label`])}平均 {fmt(m[`${prefix}_sideways_volume_avg_reference`] ?? m[`${prefix}_sideways_volume_avg_all`])} / ±3本平均出来高が基準の3倍以上</td></tr>
+          <tr><th>最大値側 出来高</th><td>±3本平均 {fmt(m[`${prefix}_sideways_range_high_window_volume_avg`])} / 基準平均 {fmt(m[`${prefix}_sideways_range_high_reference_volume_avg`])} / 倍率 {fmt(m[`${prefix}_sideways_range_high_volume_ratio`])}</td></tr>
+          <tr><th>最小値側 出来高</th><td>±3本平均 {fmt(m[`${prefix}_sideways_range_low_window_volume_avg`])} / 基準平均 {fmt(m[`${prefix}_sideways_range_low_reference_volume_avg`])} / 倍率 {fmt(m[`${prefix}_sideways_range_low_volume_ratio`])}</td></tr>
         </tbody>
       </table>
     </section>

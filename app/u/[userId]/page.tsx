@@ -92,6 +92,9 @@ function tagClass(t: string) {
   if (['BBブレイク', 'BB拡大中'].includes(t)) return 'blue';
   if (['小型株'].includes(t)) return 'green';
   if (t.startsWith('決算日:')) return 'orange';
+  if (t.includes('レンジ最大')) return 'purple';
+  if (t.includes('レンジ最小')) return 'green';
+  if (t.includes('レンジ内')) return 'blue';
   return 'gray';
 }
 
@@ -125,7 +128,7 @@ function CompactRow({ row, userId, unscored = false }: { row: ResultRow; userId:
       </div>
       {!unscored ? <div className="line-score compact"><span>達</span><b>{fmt(row.condition_count)}</b></div> : null}
       <div className="line-tags">
-        {tags.slice(0, 3).map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}
+        {tags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}
       </div>
       <div className="line-actions">
         {!unscored ? <Link className="mini-btn" href={`/u/${userId}/score/${row.code}`}>詳細</Link> : null}
