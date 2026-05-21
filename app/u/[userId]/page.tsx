@@ -164,6 +164,13 @@ function isSidewaysRawTag(t: string) {
   return t.includes('レンジ') || t.includes('横ばい');
 }
 
+function shouldShowBbBreakout(row: ResultRow) {
+  const m = row.metrics || {};
+  // 古い分析結果や下方向ブレイクの残存タグを画面で抑止する。
+  // 現在値がBB+1σ以上であることをCore側のmetricsで確認できる場合だけ表示する。
+  return m.daily_bb_breakout === true && m.daily_bb_breakout_current_positive_touch === true;
+}
+
 function displayTag(t: string, isAdmin: boolean) {
   if (isAdmin) return t;
   if (t === 'BBブレイク' || t === 'BBスクイーズブレイク') return '上放れ候補';
@@ -184,13 +191,22 @@ function tagClass(t: string) {
 
 function visibleTags(row: ResultRow, isAdmin: boolean) {
   let tags = (row.tags || []).filter((t) => t !== 'MARKET_ENV');
+  const m = row.metrics || {};
+  // BBブレイク/上放れ候補は、現在値がBB+1σ以上のときだけ表示する。
+  // 既存DBに古いBBブレイクタグが残っていても、ここで抑止する。
+  tags = tags.filter((t) => {
+    if (t === 'BBブレイク' || t === 'BBスクイーズブレイク' || t.includes('BB横ばいレンジ')) {
+      return shouldShowBbBreakout(row);
+    }
+    return true;
+  });
+
   if (!isAdmin) {
     tags = tags
       .filter((t) => !HIDDEN_TAGS_PUBLIC.has(t))
       .filter((t) => !isSidewaysRawTag(t));
   }
 
-  const m = row.metrics || {};
   if (isAdmin) {
     const dailyMax = rangeTag('日足', '最大', m.daily_sideways_range_max ?? m.daily_sideways_range_high, m.daily_sideways_range_max_date ?? m.daily_sideways_range_high_date);
     const dailyMin = rangeTag('日足', '最小', m.daily_sideways_range_min ?? m.daily_sideways_range_low, m.daily_sideways_range_min_date ?? m.daily_sideways_range_low_date);
