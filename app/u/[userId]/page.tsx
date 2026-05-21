@@ -232,13 +232,32 @@ function hasAnyTag(row: ResultRow, words: string[], isAdmin: boolean) {
 
 function statusOf(row: ResultRow, isAdmin: boolean): StatusKey {
   const tags = visibleTags(row, isAdmin);
-  if (tags.some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))) return 'EARNINGS_EXCLUDE';
+  // 出来高・ボラ条件を満たしていない銘柄は、イベント有無にかかわらず参考確認リストに置く。
+  // ただし、決算などのイベント確認自体は visibleTags 側で行い、参考確認リスト内にもイベントタグを表示する。
   if (!isScored(row)) return 'OUT_OF_SCOPE';
+  if (tags.some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))) return 'EARNINGS_EXCLUDE';
   if (tags.some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))) return 'EARNINGS_CAUTION';
   if (Number(row.score) >= 22) return 'WATCH_PRIORITY';
   if (tags.some((t) => t.includes('上放れ候補') || t.includes('BBブレイク') || t.includes('BB横ばいレンジ'))) return 'BREAKOUT_WATCH';
   if (tags.some((t) => t.includes('もみ合い圏') || t.includes('レンジ内') || t.includes('RSI横ばいレンジ') || t.includes('MA横ばいレンジ'))) return 'REVERSAL_WAIT';
   return 'WATCH_LIST';
+}
+
+function hasEventTag(row: ResultRow, isAdmin: boolean) {
+  return visibleTags(row, isAdmin).some((t) =>
+    t.includes('イベント注意') ||
+    t.includes('イベント前確認') ||
+    t.includes('決算直前注意') ||
+    t.includes('決算前除外') ||
+    t.startsWith('決算日:')
+  );
+}
+
+function eventLevel(row: ResultRow, isAdmin: boolean) {
+  const tags = visibleTags(row, isAdmin);
+  if (tags.some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))) return 'exclude';
+  if (tags.some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))) return 'caution';
+  return 'none';
 }
 
 function reasonsOf(row: ResultRow, isAdmin: boolean) {
@@ -366,8 +385,9 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
   const tone = marketEnv?.label ? { label: marketEnv.label, stars: marketEnv.stars || fallbackTone.stars, comment: marketEnv.comment || fallbackTone.comment } : fallbackTone;
   const outRows = byStatus('OUT_OF_SCOPE');
   const upsideCount = rows.filter((r) => hasAnyTag(r, ['上放れ候補', 'BBブレイク'], isAdmin)).length;
-  const eventCaution = byStatus('EARNINGS_CAUTION').length;
-  const eventExclude = byStatus('EARNINGS_EXCLUDE').length;
+  const eventCaution = rows.filter((r) => eventLevel(r, isAdmin) === 'caution').length;
+  const eventExclude = rows.filter((r) => eventLevel(r, isAdmin) === 'exclude').length;
+  const eventRows = rows.filter((r) => hasEventTag(r, isAdmin) && isScored(r));
 
   return (
     <>
@@ -410,7 +430,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
         <Section title={isAdmin ? 'ブレイク監視銘柄' : '上放れ候補'} subtitle="上方向への動き出しを確認したい銘柄です。" rows={byStatus('BREAKOUT_WATCH')} userId={userId} isAdmin={isAdmin} />
         <Section title={isAdmin ? '反転待ち銘柄' : 'もみ合い圏'} subtitle="レンジ内や押し目圏として、チャート位置を確認したい銘柄です。" rows={byStatus('REVERSAL_WAIT')} userId={userId} isAdmin={isAdmin} />
         <Section title="通常確認" subtitle="主要な分類には入っていませんが、継続確認する銘柄です。" rows={byStatus('WATCH_LIST')} userId={userId} isAdmin={isAdmin} />
-        <Section title="イベント注意・確認" subtitle="決算などのイベント前後に注意して確認したい銘柄です。" rows={[...byStatus('EARNINGS_CAUTION'), ...byStatus('EARNINGS_EXCLUDE')]} userId={userId} isAdmin={isAdmin} />
+        <Section title="イベント注意・確認" subtitle="決算などのイベント前後に注意して確認したい銘柄です。参考確認リストの銘柄にも、イベントタグは表示します。" rows={eventRows} userId={userId} isAdmin={isAdmin} />
         <Section title={isAdmin ? 'スコア判定対象外' : '参考確認リスト'} subtitle="現時点では主要条件がそろっていないため、参考として確認する銘柄です。" rows={outRows} userId={userId} isAdmin={isAdmin} />
 
         <section className="section guide-section">
