@@ -128,33 +128,9 @@ function percentText(value: any) {
 }
 
 function priceWithChange(row: ResultRow) {
-  const close = Number(row.close);
-  const m = row.metrics || {};
-  const pctCandidates = [
-    m.daily_change_pct,
-    m.price_change_pct,
-    m.change_pct,
-    m.daily_return_pct,
-    m.close_change_pct,
-  ];
-  const pct = pctCandidates.find((v) => Number.isFinite(Number(v)));
-  if (pct !== undefined) return `${numberText(close)}（${percentText(pct)}）`;
-
-  const prevCandidates = [
-    m.prev_close,
-    m.previous_close,
-    m.daily_prev_close,
-    m.daily_close_prev,
-    m.close_prev,
-    m.yesterday_close,
-    m.daily_close_yesterday,
-  ];
-  const prev = prevCandidates.find((v) => Number.isFinite(Number(v)) && Number(v) > 0);
-  if (Number.isFinite(close) && prev !== undefined) {
-    const pctFromPrev = (close / Number(prev) - 1) * 100;
-    return `${numberText(close)}（${percentText(pctFromPrev)}）`;
-  }
-  return `${numberText(close)}（-）`;
+  // 有償提供画面では、前日比や騰落率を出さず、株価のみを表示する。
+  // 表示形式は「株価: 2,429（-）」で統一する。
+  return `${numberText(row.close)}（-）`;
 }
 
 function signed(value: any, suffix = '') {
@@ -243,18 +219,20 @@ function visibleTags(row: ResultRow, isAdmin: boolean) {
     tags = tags.filter((t) => !t.includes('レンジ最大') && !t.includes('レンジ最小'));
   }
 
-  if (m.daily_sideways_range_in === true || m.daily_sideways_range_in_tag) tags.push(isAdmin ? '日足レンジ内' : 'もみ合い圏');
-  if (m.weekly_sideways_range_in === true || m.weekly_sideways_range_in_tag) tags.push(isAdmin ? '週足レンジ内' : 'もみ合い圏');
+  if (isAdmin) {
+    if (m.daily_sideways_range_in === true || m.daily_sideways_range_in_tag) tags.push('日足レンジ内');
+    if (m.weekly_sideways_range_in === true || m.weekly_sideways_range_in_tag) tags.push('週足レンジ内');
 
-  for (const t of [
-    m.daily_sideways_bb_range_tag,
-    m.daily_sideways_rsi_range_tag,
-    m.daily_sideways_ma_range_tag,
-    m.weekly_sideways_bb_range_tag,
-    m.weekly_sideways_rsi_range_tag,
-    m.weekly_sideways_ma_range_tag,
-  ]) {
-    if (t) tags.push(String(t));
+    for (const t of [
+      m.daily_sideways_bb_range_tag,
+      m.daily_sideways_rsi_range_tag,
+      m.daily_sideways_ma_range_tag,
+      m.weekly_sideways_bb_range_tag,
+      m.weekly_sideways_rsi_range_tag,
+      m.weekly_sideways_ma_range_tag,
+    ]) {
+      if (t) tags.push(String(t));
+    }
   }
 
   const rawHasEarnings = tags.some((t) => ['決算直前注意', '決算前除外', 'イベント注意', 'イベント前確認'].includes(t));
@@ -262,7 +240,18 @@ function visibleTags(row: ResultRow, isAdmin: boolean) {
   const md = formatMd(earningsDate);
   if (rawHasEarnings && md) tags.push(`決算日:${md}`);
 
-  return Array.from(new Set(tags.map((t) => displayTag(t, isAdmin)).filter(Boolean)));
+  const displayed = Array.from(new Set(tags.map((t) => displayTag(t, isAdmin)).filter(Boolean)));
+  if (isAdmin) return displayed;
+
+  // 一般ユーザ画面では、個別タグとしての「日足上放れ候補」「週足上放れ候補」「もみ合い圏」は表示しない。
+  // 分類名・セクション名としての「上放れ候補」「もみ合い圏」は残す。
+  return displayed.filter((t) =>
+    t !== 'もみ合い圏' &&
+    t !== '日足上放れ候補' &&
+    t !== '週足上放れ候補' &&
+    t !== '日足もみ合い圏' &&
+    t !== '週足もみ合い圏'
+  );
 }
 
 function isScored(row: ResultRow) {
@@ -380,7 +369,7 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         <div className="stock-title"><b>{row.code}</b><span>{row.name || ''}</span></div>
         <div className="stock-numbers">
           <span>S<b>{isScored(row) ? fmt(row.score) : '-'}</b></span>
-          <span className="price-number">株価:<b>{priceWithChange(row)}</b></span>
+          <span className="price-number">株価: <b>{priceWithChange(row)}</b></span>
         </div>
       </div>
       <div className="stock-tags">
