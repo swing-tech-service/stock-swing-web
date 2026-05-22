@@ -22,9 +22,13 @@ type MarketIndex = {
   close?: number | null;
   diff?: number | null;
   diff_pct?: number | null;
+  ma5?: number | null;
+  ma25?: number | null;
   ma5_gt_ma25?: boolean;
   close_gt_ma25?: boolean;
   rsi14?: number | null;
+  macd?: number | null;
+  macd_signal?: number | null;
   macd_gt_signal?: boolean;
   slow_k?: number | null;
   slow_d?: number | null;
@@ -110,6 +114,49 @@ function fmt(value: any, suffix = '') {
   return `${value}${suffix}`;
 }
 
+function numberText(value: any) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: n >= 1000 ? 0 : 1 }).format(n);
+}
+
+function percentText(value: any) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  const sign = n > 0 ? '＋' : n < 0 ? '−' : '±';
+  return `${sign}${Math.abs(n).toFixed(1)}%`;
+}
+
+function priceWithChange(row: ResultRow) {
+  const close = Number(row.close);
+  const m = row.metrics || {};
+  const pctCandidates = [
+    m.daily_change_pct,
+    m.price_change_pct,
+    m.change_pct,
+    m.daily_return_pct,
+    m.close_change_pct,
+  ];
+  const pct = pctCandidates.find((v) => Number.isFinite(Number(v)));
+  if (pct !== undefined) return `${numberText(close)}（${percentText(pct)}）`;
+
+  const prevCandidates = [
+    m.prev_close,
+    m.previous_close,
+    m.daily_prev_close,
+    m.daily_close_prev,
+    m.close_prev,
+    m.yesterday_close,
+    m.daily_close_yesterday,
+  ];
+  const prev = prevCandidates.find((v) => Number.isFinite(Number(v)) && Number(v) > 0);
+  if (Number.isFinite(close) && prev !== undefined) {
+    const pctFromPrev = (close / Number(prev) - 1) * 100;
+    return `${numberText(close)}（${percentText(pctFromPrev)}）`;
+  }
+  return `${numberText(close)}（-）`;
+}
+
 function signed(value: any, suffix = '') {
   if (value === null || value === undefined || value === '') return '-';
   const n = Number(value);
@@ -160,20 +207,11 @@ const HIDDEN_TAGS_PUBLIC = new Set([
   'BB拡大中',
 ]);
 
-function isSidewaysRawTag(t: string) {
-  return t.includes('レンジ') || t.includes('横ばい');
-}
-
-function shouldShowBbBreakout(row: ResultRow) {
-  const m = row.metrics || {};
-  // 古い分析結果や下方向ブレイクの残存タグを画面で抑止する。
-  // 現在値がBB+1σ以上であることをCore側のmetricsで確認できる場合だけ表示する。
-  return m.daily_bb_breakout === true && m.daily_bb_breakout_current_positive_touch === true;
-}
-
 function displayTag(t: string, isAdmin: boolean) {
   if (isAdmin) return t;
   if (t === 'BBブレイク' || t === 'BBスクイーズブレイク') return '上放れ候補';
+  if (t.includes('BB横ばいレンジ')) return t.replace('BB横ばいレンジ', '上放れ候補');
+  if (t.includes('RSI横ばいレンジ') || t.includes('MA横ばいレンジ') || t.includes('レンジ内')) return 'もみ合い圏';
   if (t === '決算直前注意') return 'イベント注意';
   if (t === '決算前除外') return 'イベント前確認';
   return t;
@@ -182,50 +220,41 @@ function displayTag(t: string, isAdmin: boolean) {
 function tagClass(t: string) {
   if (t.includes('イベント前確認') || t.includes('決算前除外')) return 'red';
   if (t.includes('イベント注意') || t.includes('決算直前注意') || t.startsWith('決算日:')) return 'orange';
-  if (t.includes('上放れ候補') || t.includes('BBブレイク')) return 'blue';
-  if (t.includes('もみ合い圏')) return 'green';
-  if (t.includes('レンジ最大') || t.includes('レンジ最小') || t.includes('横ばい')) return 'purple';
+  if (t.includes('上放れ候補') || t.includes('BBブレイク') || t.includes('BB横ばいレンジ')) return 'blue';
+  if (t.includes('もみ合い圏') || t.includes('レンジ内')) return 'green';
+  if (t.includes('レンジ最大') || t.includes('レンジ最小') || t.includes('RSI横ばいレンジ') || t.includes('MA横ばいレンジ')) return 'purple';
   if (['小型株'].includes(t)) return 'green';
   return 'gray';
 }
 
 function visibleTags(row: ResultRow, isAdmin: boolean) {
   let tags = (row.tags || []).filter((t) => t !== 'MARKET_ENV');
+  if (!isAdmin) tags = tags.filter((t) => !HIDDEN_TAGS_PUBLIC.has(t));
+
   const m = row.metrics || {};
-  // BBブレイク/上放れ候補は、現在値がBB+1σ以上のときだけ表示する。
-  // 既存DBに古いBBブレイクタグが残っていても、ここで抑止する。
-  tags = tags.filter((t) => {
-    if (t === 'BBブレイク' || t === 'BBスクイーズブレイク' || t.includes('BB横ばいレンジ')) {
-      return shouldShowBbBreakout(row);
-    }
-    return true;
-  });
-
-  if (!isAdmin) {
-    tags = tags
-      .filter((t) => !HIDDEN_TAGS_PUBLIC.has(t))
-      .filter((t) => !isSidewaysRawTag(t));
-  }
-
   if (isAdmin) {
     const dailyMax = rangeTag('日足', '最大', m.daily_sideways_range_max ?? m.daily_sideways_range_high, m.daily_sideways_range_max_date ?? m.daily_sideways_range_high_date);
     const dailyMin = rangeTag('日足', '最小', m.daily_sideways_range_min ?? m.daily_sideways_range_low, m.daily_sideways_range_min_date ?? m.daily_sideways_range_low_date);
     const weeklyMax = rangeTag('週足', '最大', m.weekly_sideways_range_max ?? m.weekly_sideways_range_high, m.weekly_sideways_range_max_date ?? m.weekly_sideways_range_high_date);
     const weeklyMin = rangeTag('週足', '最小', m.weekly_sideways_range_min ?? m.weekly_sideways_range_low, m.weekly_sideways_range_min_date ?? m.weekly_sideways_range_low_date);
     for (const t of [dailyMax, dailyMin, weeklyMax, weeklyMin]) if (t) tags.push(t);
+  } else {
+    // 有償提供画面では、具体的な横ばいレンジ価格タグは非表示。
+    tags = tags.filter((t) => !t.includes('レンジ最大') && !t.includes('レンジ最小'));
+  }
 
-    if (m.daily_sideways_range_in === true || m.daily_sideways_range_in_tag) tags.push('日足レンジ内');
-    if (m.weekly_sideways_range_in === true || m.weekly_sideways_range_in_tag) tags.push('週足レンジ内');
-    for (const t of [
-      m.daily_sideways_bb_range_tag,
-      m.daily_sideways_rsi_range_tag,
-      m.daily_sideways_ma_range_tag,
-      m.weekly_sideways_bb_range_tag,
-      m.weekly_sideways_rsi_range_tag,
-      m.weekly_sideways_ma_range_tag,
-    ]) {
-      if (t) tags.push(String(t));
-    }
+  if (m.daily_sideways_range_in === true || m.daily_sideways_range_in_tag) tags.push(isAdmin ? '日足レンジ内' : 'もみ合い圏');
+  if (m.weekly_sideways_range_in === true || m.weekly_sideways_range_in_tag) tags.push(isAdmin ? '週足レンジ内' : 'もみ合い圏');
+
+  for (const t of [
+    m.daily_sideways_bb_range_tag,
+    m.daily_sideways_rsi_range_tag,
+    m.daily_sideways_ma_range_tag,
+    m.weekly_sideways_bb_range_tag,
+    m.weekly_sideways_rsi_range_tag,
+    m.weekly_sideways_ma_range_tag,
+  ]) {
+    if (t) tags.push(String(t));
   }
 
   const rawHasEarnings = tags.some((t) => ['決算直前注意', '決算前除外', 'イベント注意', 'イベント前確認'].includes(t));
@@ -246,14 +275,32 @@ function hasAnyTag(row: ResultRow, words: string[], isAdmin: boolean) {
 
 function statusOf(row: ResultRow, isAdmin: boolean): StatusKey {
   const tags = visibleTags(row, isAdmin);
-  // ボラ・出来高未達は参考確認リストへ。ただしイベントタグは同じ行に表示する。
+  // 出来高・ボラ条件を満たしていない銘柄は、イベント有無にかかわらず参考確認リストに置く。
+  // ただし、決算などのイベント確認自体は visibleTags 側で行い、参考確認リスト内にもイベントタグを表示する。
   if (!isScored(row)) return 'OUT_OF_SCOPE';
   if (tags.some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))) return 'EARNINGS_EXCLUDE';
   if (tags.some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))) return 'EARNINGS_CAUTION';
   if (Number(row.score) >= 22) return 'WATCH_PRIORITY';
-  if (tags.some((t) => t.includes('上放れ候補') || t.includes('BBブレイク'))) return 'BREAKOUT_WATCH';
-  if (tags.some((t) => t.includes('もみ合い圏') || t.includes('レンジ内') || t.includes('横ばい'))) return 'REVERSAL_WAIT';
+  if (tags.some((t) => t.includes('上放れ候補') || t.includes('BBブレイク') || t.includes('BB横ばいレンジ'))) return 'BREAKOUT_WATCH';
+  if (tags.some((t) => t.includes('もみ合い圏') || t.includes('レンジ内') || t.includes('RSI横ばいレンジ') || t.includes('MA横ばいレンジ'))) return 'REVERSAL_WAIT';
   return 'WATCH_LIST';
+}
+
+function hasEventTag(row: ResultRow, isAdmin: boolean) {
+  return visibleTags(row, isAdmin).some((t) =>
+    t.includes('イベント注意') ||
+    t.includes('イベント前確認') ||
+    t.includes('決算直前注意') ||
+    t.includes('決算前除外') ||
+    t.startsWith('決算日:')
+  );
+}
+
+function eventLevel(row: ResultRow, isAdmin: boolean) {
+  const tags = visibleTags(row, isAdmin);
+  if (tags.some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))) return 'exclude';
+  if (tags.some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))) return 'caution';
+  return 'none';
 }
 
 function reasonsOf(row: ResultRow, isAdmin: boolean) {
@@ -273,10 +320,10 @@ function reasonsOf(row: ResultRow, isAdmin: boolean) {
 function fallbackMarketTone(rows: ResultRow[], isAdmin: boolean) {
   const scored = rows.filter(isScored);
   const high = scored.filter((r) => Number(r.score) >= 22).length;
-  const upside = rows.filter((r) => hasAnyTag(r, ['上放れ候補', 'BBブレイク'], isAdmin)).length;
+  const bb = rows.filter((r) => hasAnyTag(r, ['上放れ候補', 'BBブレイク'], isAdmin)).length;
   const risk = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('イベント注意') || t.includes('決算'))).length;
   const ratio = scored.length ? high / scored.length : 0;
-  const score = ratio * 2 + Math.min(upside, 5) * 0.25 - Math.min(risk, 5) * 0.15;
+  const score = ratio * 2 + Math.min(bb, 5) * 0.25 - Math.min(risk, 5) * 0.15;
   if (score >= 1.6) return { label: 'やや強気', stars: '★★★★☆', comment: '確認候補が多く、比較的整理しやすい状況です。' };
   if (score >= 0.9) return { label: '中立', stars: '★★★☆☆', comment: '候補はあります。イベントと株価位置を確認しながら選別します。' };
   if (score >= 0.4) return { label: 'やや慎重', stars: '★★☆☆☆', comment: '確認候補を絞り、イベント前の銘柄に注意します。' };
@@ -333,8 +380,7 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         <div className="stock-title"><b>{row.code}</b><span>{row.name || ''}</span></div>
         <div className="stock-numbers">
           <span>S<b>{isScored(row) ? fmt(row.score) : '-'}</b></span>
-          {isScored(row) ? <span>達<b>{fmt(row.condition_count)}</b></span> : null}
-          <span>値<b>{fmt(row.close)}</b></span>
+          <span className="price-number">株価:<b>{priceWithChange(row)}</b></span>
         </div>
       </div>
       <div className="stock-tags">
@@ -380,15 +426,17 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
   const marketEnv = data.marketEnv;
   const tone = marketEnv?.label ? { label: marketEnv.label, stars: marketEnv.stars || fallbackTone.stars, comment: marketEnv.comment || fallbackTone.comment } : fallbackTone;
   const outRows = byStatus('OUT_OF_SCOPE');
-  const eventCautionCount = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))).length;
-  const eventBeforeCount = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))).length;
+  const upsideCount = rows.filter((r) => hasAnyTag(r, ['上放れ候補', 'BBブレイク'], isAdmin)).length;
+  const eventCaution = rows.filter((r) => eventLevel(r, isAdmin) === 'caution').length;
+  const eventExclude = rows.filter((r) => eventLevel(r, isAdmin) === 'exclude').length;
+  const eventRows = rows.filter((r) => hasEventTag(r, isAdmin) && isScored(r));
 
   return (
     <>
       <header className="hero premium-hero">
         <div className="eyebrow">Premium Swing Screening {isAdmin ? ' / Admin' : ''}</div>
         <h1>スイング監視ダッシュボード</h1>
-        <p className="hero-lead">テクニカルとイベントから今日確認すべき銘柄を自動整理します。</p>
+        <p className="hero-lead">テクニカルとイベントからあなたの銘柄を整理します。</p>
         <p className="meta">ユーザ: {userId} / 最終更新: {lastUpdated} / 毎日16:30 JST頃から更新開始</p>
       </header>
       <main className="wrap premium-wrap">
@@ -415,8 +463,8 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
           <div><span>{isAdmin ? '監視優先' : '注目候補'}</span><b>{byStatus('WATCH_PRIORITY').length}</b></div>
           <div><span>{isAdmin ? 'ブレイク監視' : '上放れ候補'}</span><b>{byStatus('BREAKOUT_WATCH').length}</b></div>
           <div><span>{isAdmin ? '反転待ち' : 'もみ合い圏'}</span><b>{byStatus('REVERSAL_WAIT').length}</b></div>
-          <div><span>イベント注意</span><b>{eventCautionCount}</b></div>
-          <div><span>イベント前確認</span><b>{eventBeforeCount}</b></div>
+          <div><span>イベント注意</span><b>{eventCaution}</b></div>
+          <div><span>イベント前確認</span><b>{eventExclude}</b></div>
           <div><span>{isAdmin ? 'スコア対象外' : '参考確認'}</span><b>{outRows.length}</b></div>
         </section>
 
@@ -424,7 +472,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
         <Section title={isAdmin ? 'ブレイク監視銘柄' : '上放れ候補'} subtitle="上方向への動き出しを確認したい銘柄です。" rows={byStatus('BREAKOUT_WATCH')} userId={userId} isAdmin={isAdmin} />
         <Section title={isAdmin ? '反転待ち銘柄' : 'もみ合い圏'} subtitle="レンジ内や押し目圏として、チャート位置を確認したい銘柄です。" rows={byStatus('REVERSAL_WAIT')} userId={userId} isAdmin={isAdmin} />
         <Section title="通常確認" subtitle="主要な分類には入っていませんが、継続確認する銘柄です。" rows={byStatus('WATCH_LIST')} userId={userId} isAdmin={isAdmin} />
-        <Section title="イベント注意・確認" subtitle="決算などのイベント前後に注意して確認したい銘柄です。" rows={[...byStatus('EARNINGS_CAUTION'), ...byStatus('EARNINGS_EXCLUDE')]} userId={userId} isAdmin={isAdmin} />
+        <Section title="イベント注意・確認" subtitle="決算などのイベント前後に注意して確認したい銘柄です。参考確認リストの銘柄にも、イベントタグは表示します。" rows={eventRows} userId={userId} isAdmin={isAdmin} />
         <Section title={isAdmin ? 'スコア判定対象外' : '参考確認リスト'} subtitle="現時点では主要条件がそろっていないため、参考として確認する銘柄です。" rows={outRows} userId={userId} isAdmin={isAdmin} />
 
         <section className="section guide-section">
