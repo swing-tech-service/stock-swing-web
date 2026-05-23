@@ -110,6 +110,48 @@ function fmt(value: any, suffix = '') {
   return `${value}${suffix}`;
 }
 
+function fmtNumber(value: any, digits = 0) {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: digits }).format(n);
+}
+
+function marketCapText(row: ResultRow) {
+  const yen = row.metrics?.market_cap_yen ?? row.metrics?.market_cap;
+  if (yen === null || yen === undefined || yen === '') return '';
+  const n = Number(yen);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const oku = n / 100_000_000;
+  if (oku >= 1000) return `${fmtNumber(Math.round(oku), 0)}億`;
+  if (oku >= 100) return `${fmtNumber(Math.round(oku), 0)}億`;
+  return `${fmtNumber(oku, 1)}億`;
+}
+
+function quarterShort(value: any) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return raw
+    .replace('第１四半期', '1Q')
+    .replace('第1四半期', '1Q')
+    .replace('第２四半期', '2Q')
+    .replace('第2四半期', '2Q')
+    .replace('第３四半期', '3Q')
+    .replace('第3四半期', '3Q')
+    .replace('第４四半期', '4Q')
+    .replace('第4四半期', '4Q')
+    .replace('本決算', '本決算');
+}
+
+function earningsInlineText(row: ResultRow) {
+  const m = row.metrics || {};
+  const prevDate = m.prev_earnings_date;
+  const nextDate = m.next_earnings_date || m.earnings_date;
+  const prev = prevDate ? `前:${formatMd(prevDate)} ${quarterShort(m.prev_earnings_quarter)}`.trim() : '';
+  const next = nextDate ? `次:${formatMd(nextDate)} ${quarterShort(m.next_earnings_quarter || m.earnings_quarter)}`.trim() : '';
+  return [prev, next].filter(Boolean).join(' / ');
+}
+
 function signed(value: any, suffix = '') {
   if (value === null || value === undefined || value === '') return '-';
   const n = Number(value);
@@ -321,53 +363,6 @@ function kabutanUrl(row: ResultRow) {
   return `https://kabutan.jp/stock/chart?code=${encodeURIComponent(String(row.code))}`;
 }
 
-
-function yen(value: any) {
-  if (value === null || value === undefined || value === '') return '-';
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value);
-  return n.toLocaleString('ja-JP', { maximumFractionDigits: n >= 1000 ? 0 : 1 });
-}
-
-function rrRank(row: ResultRow) {
-  const m = row.metrics || {};
-  if (!m.rr_enabled) return 9999;
-  const d = Number(m.rr2_entry_downside_pct ?? 9999);
-  return Number.isFinite(d) ? Math.abs(d) : 9999;
-}
-
-function isRrCandidate(row: ResultRow) {
-  const m = row.metrics || {};
-  return m.rr_enabled === true && m.rr2_entry_price !== null && m.rr2_entry_price !== undefined;
-}
-
-function AdminRrBox({ row }: { row: ResultRow }) {
-  const m = row.metrics || {};
-  if (!m.rr_enabled) return null;
-  const sources = Array.isArray(m.rr_support_sources) ? m.rr_support_sources.join(' / ') : '-';
-  const prices = Array.isArray(m.rr_support_prices) ? m.rr_support_prices.map((v: any) => yen(v)).join(' / ') : '-';
-  return (
-    <div className="admin-rr-box">
-      <div className="admin-rr-title">RR確認（管理者）</div>
-      <div className="admin-rr-grid">
-        <span>損切候補:<b>{yen(m.rr_stop_candidate)}</b></span>
-        <span>損切距離:<b>{fmt(m.rr_stop_distance_pct, '%')}</b></span>
-        <span>利確候補:<b>{yen(m.rr_target_candidate)}</b></span>
-        <span>上値余地:<b>{fmt(m.rr_upside_pct, '%')}</b></span>
-        <span>現在RR:<b>{fmt(m.rr_ratio)}</b></span>
-        <span>RR2価格:<b>{yen(m.rr2_entry_price)}</b></span>
-        <span>RR2ゾーン:<b>{yen(m.rr2_entry_zone_low)}〜{yen(m.rr2_entry_zone_high)}</b></span>
-        <span>現値から:<b>{fmt(m.rr2_entry_downside_pct, '%')}</b></span>
-        <span>支持集中:<b>{yen(m.rr_support_cluster_price)}</b></span>
-        <span>支持根拠:<b>{fmt(m.rr_support_count)}件</b></span>
-      </div>
-      <div className="admin-rr-detail">根拠: {sources}</div>
-      <div className="admin-rr-detail">価格: {prices}</div>
-      <div className="admin-rr-detail">参考値: 75MA {yen(m.rr_reference_sma75)} / 雲 {yen(m.rr_reference_cloud_lower)}〜{yen(m.rr_reference_cloud_upper)} / BB-3σ {yen(m.rr_reference_bb_lower3)}</div>
-    </div>
-  );
-}
-
 function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; isAdmin: boolean }) {
   const tags = visibleTags(row, isAdmin);
   const status = statusOf(row, isAdmin);
@@ -381,6 +376,8 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         <div className="stock-numbers">
           <span>S<b>{isScored(row) ? fmt(row.score) : '-'}</b></span>
           <span>株価:<b>{fmt(row.close)}</b></span>
+          {marketCapText(row) ? <span>時価総額:<b>{marketCapText(row)}</b></span> : null}
+          {earningsInlineText(row) ? <span className="earnings-inline">決算:<b>{earningsInlineText(row)}</b></span> : null}
         </div>
       </div>
       <div className="stock-tags">
@@ -388,7 +385,6 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         {tags.length > shownTags.length ? <span className="badge gray">+{tags.length - shownTags.length}</span> : null}
       </div>
       {isAdmin && reasons.length ? <div className="reason-line">理由: {reasons.join(' / ')}</div> : null}
-      {isAdmin ? <AdminRrBox row={row} /> : null}
       <div className="stock-actions">
         {isAdmin ? <Link className="mini-btn" href={`/u/${userId}/score/${row.code}`}>詳細</Link> : null}
         <a className="mini-btn kabutan" href={kabutanUrl(row)} target="_blank" rel="noreferrer">株探</a>
@@ -427,7 +423,6 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
   const marketEnv = data.marketEnv;
   const tone = marketEnv?.label ? { label: marketEnv.label, stars: marketEnv.stars || fallbackTone.stars, comment: marketEnv.comment || fallbackTone.comment } : fallbackTone;
   const outRows = byStatus('OUT_OF_SCOPE');
-  const rrRows = isAdmin ? rows.filter(isRrCandidate).sort((a, b) => rrRank(a) - rrRank(b)) : [];
   const eventCautionCount = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))).length;
   const eventBeforeCount = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))).length;
 
@@ -468,8 +463,6 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
           <div><span>{isAdmin ? 'スコア対象外' : '参考確認'}</span><b>{outRows.length}</b></div>
         </section>
 
-
-        {isAdmin ? <Section title="RR確認候補（管理者）" subtitle="損切候補・利確候補・RR=2となる価格帯を確認する管理者専用リストです。" rows={rrRows} userId={userId} isAdmin={isAdmin} /> : null}
         <Section title={isAdmin ? '監視優先銘柄' : '注目候補'} subtitle="複数の確認材料が重なっている銘柄です。" rows={byStatus('WATCH_PRIORITY')} userId={userId} isAdmin={isAdmin} />
         <Section title={isAdmin ? 'ブレイク監視銘柄' : '上放れ候補'} subtitle="上方向への動き出しを確認したい銘柄です。" rows={byStatus('BREAKOUT_WATCH')} userId={userId} isAdmin={isAdmin} />
         <Section title={isAdmin ? '反転待ち銘柄' : 'もみ合い圏'} subtitle="レンジ内や押し目圏として、チャート位置を確認したい銘柄です。" rows={byStatus('REVERSAL_WAIT')} userId={userId} isAdmin={isAdmin} />

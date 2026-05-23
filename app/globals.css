@@ -6,5 +6,6 @@
 /* Paid safe v3: hide achievement count and show price change clearly */
 .stock-numbers{gap:10px}.stock-numbers .price-number b{font-size:15px}.price-number{white-space:nowrap}@media(max-width:760px){.stock-numbers .price-number b{font-size:13px}.stock-numbers{max-width:145px}.price-number{justify-content:flex-end}}
 
-/* Admin-only risk/reward box */
-.admin-rr-box{margin:8px 0 34px;background:#f8fafc;border:1px dashed #94a3b8;border-radius:14px;padding:10px}.admin-rr-title{font-size:12px;font-weight:950;color:#334155;margin-bottom:6px}.admin-rr-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.admin-rr-grid span{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:6px;font-size:11px;color:#64748b;font-weight:850}.admin-rr-grid b{display:block;color:#0f172a;font-size:13px;margin-top:2px}.admin-rr-detail{font-size:11px;color:#475569;font-weight:750;margin-top:5px;line-height:1.45}@media(max-width:760px){.admin-rr-box{margin-bottom:32px}.admin-rr-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-rr-grid span{font-size:10px;padding:5px}.admin-rr-grid b{font-size:12px}}
+/* Market cap and earnings inline display */
+.stock-numbers{flex-wrap:wrap;justify-content:flex-end;max-width:520px}.stock-numbers .earnings-inline{flex-basis:100%;justify-content:flex-end}.stock-numbers .earnings-inline b{font-size:12px}
+@media(max-width:760px){.stock-numbers{max-width:180px}.stock-numbers .earnings-inline{align-items:flex-end;text-align:right;line-height:1.25}.stock-numbers .earnings-inline b{font-size:11px}}
