@@ -110,54 +110,53 @@ function fmt(value: any, suffix = '') {
   return `${value}${suffix}`;
 }
 
-function fmtNumber(value: any, digits = 0) {
-  if (value === null || value === undefined || value === '') return '-';
-  const n = Number(value);
-  if (!Number.isFinite(n)) return String(value);
-  return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: digits }).format(n);
-}
-
-function marketCapText(row: ResultRow) {
-  const yen = row.metrics?.market_cap_yen ?? row.metrics?.market_cap;
-  if (yen === null || yen === undefined || yen === '') return '';
-  const n = Number(yen);
-  if (!Number.isFinite(n) || n <= 0) return '';
-  const oku = n / 100_000_000;
-  if (oku >= 1000) return `${fmtNumber(Math.round(oku), 0)}億`;
-  if (oku >= 100) return `${fmtNumber(Math.round(oku), 0)}億`;
-  return `${fmtNumber(oku, 1)}億`;
-}
-
-function quarterShort(value: any) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  return raw
-    .replace('第１四半期', '1Q')
-    .replace('第1四半期', '1Q')
-    .replace('第２四半期', '2Q')
-    .replace('第2四半期', '2Q')
-    .replace('第３四半期', '3Q')
-    .replace('第3四半期', '3Q')
-    .replace('第４四半期', '4Q')
-    .replace('第4四半期', '4Q')
-    .replace('本決算', '本決算');
-}
-
-function earningsInlineText(row: ResultRow) {
-  const m = row.metrics || {};
-  const prevDate = m.prev_earnings_date;
-  const nextDate = m.next_earnings_date || m.earnings_date;
-  const prev = prevDate ? `前:${formatMd(prevDate)} ${quarterShort(m.prev_earnings_quarter)}`.trim() : '';
-  const next = nextDate ? `次:${formatMd(nextDate)} ${quarterShort(m.next_earnings_quarter || m.earnings_quarter)}`.trim() : '';
-  return [prev, next].filter(Boolean).join(' / ');
-}
-
 function signed(value: any, suffix = '') {
   if (value === null || value === undefined || value === '') return '-';
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
   const sign = n > 0 ? '+' : '';
   return `${sign}${n.toLocaleString('ja-JP')}${suffix}`;
+}
+
+function shortDate(value: any) {
+  if (!value) return '';
+  const m = String(value).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${Number(m[2])}/${Number(m[3])}`;
+  return '';
+}
+
+function scoreHistory(row: ResultRow) {
+  const h = row.metrics?.score_history_5d;
+  return Array.isArray(h) ? h : [];
+}
+
+function scoreTrendMark(history: any[]) {
+  const vals = history.map((x) => typeof x.score === 'number' ? x.score : null).filter((x) => x !== null) as number[];
+  if (vals.length < 2) return '';
+  const first = vals[0];
+  const last = vals[vals.length - 1];
+  if (last > first) return '↗';
+  if (last < first) return '↘';
+  return '→';
+}
+
+function ScoreHistory({ row }: { row: ResultRow }) {
+  const history = scoreHistory(row);
+  if (!history.length) return null;
+  const mark = scoreTrendMark(history);
+  return (
+    <div className="score-history" aria-label="5営業日のスコア推移">
+      <span className="score-history-label">5日スコア{mark ? ` ${mark}` : ''}</span>
+      <div className="score-history-pills">
+        {history.map((h: any, i: number) => (
+          <span className={`score-pill ${typeof h.score === 'number' ? 'ok' : 'na'}`} key={`${h.date || i}-${i}`} title={`${h.label || ''} ${h.date || ''} 株価:${h.close ?? '-'} score:${h.score ?? '-'}`}>
+            <small>{h.label === '当日' ? '今日' : `${h.offset_business_days}日前`}</small>
+            <b>{typeof h.score === 'number' ? h.score : '-'}</b>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function formatJst(value: any) {
@@ -376,10 +375,9 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         <div className="stock-numbers">
           <span>S<b>{isScored(row) ? fmt(row.score) : '-'}</b></span>
           <span>株価:<b>{fmt(row.close)}</b></span>
-          {marketCapText(row) ? <span>時価総額:<b>{marketCapText(row)}</b></span> : null}
-          {earningsInlineText(row) ? <span className="earnings-inline">決算:<b>{earningsInlineText(row)}</b></span> : null}
         </div>
       </div>
+      <ScoreHistory row={row} />
       <div className="stock-tags">
         {shownTags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}
         {tags.length > shownTags.length ? <span className="badge gray">+{tags.length - shownTags.length}</span> : null}

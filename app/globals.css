@@ -6,6 +6,6 @@
 /* Paid safe v3: hide achievement count and show price change clearly */
 .stock-numbers{gap:10px}.stock-numbers .price-number b{font-size:15px}.price-number{white-space:nowrap}@media(max-width:760px){.stock-numbers .price-number b{font-size:13px}.stock-numbers{max-width:145px}.price-number{justify-content:flex-end}}
 
-/* Market cap and earnings inline display */
-.stock-numbers{flex-wrap:wrap;justify-content:flex-end;max-width:520px}.stock-numbers .earnings-inline{flex-basis:100%;justify-content:flex-end}.stock-numbers .earnings-inline b{font-size:12px}
-@media(max-width:760px){.stock-numbers{max-width:180px}.stock-numbers .earnings-inline{align-items:flex-end;text-align:right;line-height:1.25}.stock-numbers .earnings-inline b{font-size:11px}}
+/* Score history v1 */
+.score-history{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 2px}.score-history-label{font-size:11px;color:#64748b;font-weight:900;white-space:nowrap}.score-history-pills{display:flex;gap:4px;flex-wrap:wrap}.score-pill{display:inline-flex;align-items:center;gap:3px;border:1px solid #dbe4ee;border-radius:999px;padding:2px 6px;background:#fff;font-size:10px;color:#475569;font-weight:900}.score-pill small{font-size:9px;color:#64748b}.score-pill b{font-size:12px;color:#0f172a}.score-pill.ok{background:#f8fafc}.score-pill.na{background:#f1f5f9;color:#94a3b8}.score-pill.na b{color:#94a3b8}
+@media(max-width:760px){.score-history{gap:4px;margin-top:3px}.score-history-label{font-size:10px}.score-history-pills{gap:3px}.score-pill{padding:2px 5px}.score-pill small{font-size:8.5px}.score-pill b{font-size:11px}}
