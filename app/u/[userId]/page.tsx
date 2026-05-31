@@ -159,6 +159,52 @@ function ScoreHistory({ row }: { row: ResultRow }) {
   );
 }
 
+
+function pctText(value: any) {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '-';
+  return `${n.toFixed(2)}%`;
+}
+
+function yenText(value: any) {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return `${new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 2 }).format(n)}円`;
+}
+
+function DividendLine({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
+  const m = row.metrics || {};
+  if (!isAdmin && m.dividend_visible !== true) return null;
+  if (isAdmin && !(m.dividend_enabled || m.dividend_checked)) return null;
+
+  if (!isAdmin) {
+    return (
+      <div className="dividend-line public">
+        <span>配当: 利回り<b>{pctText(m.dividend_yield_pct)}</b></span>
+        {m.dividend_payout_ratio_pct !== null && m.dividend_payout_ratio_pct !== undefined ? <span>性向<b>{pctText(m.dividend_payout_ratio_pct)}</b></span> : null}
+      </div>
+    );
+  }
+
+  const visible = m.dividend_visible === true;
+  return (
+    <div className={`dividend-line admin ${visible ? 'visible' : 'hidden'}`}>
+      <div className="dividend-title">配当参考: {visible ? '表示' : '非表示'}{m.dividend_hide_reason ? `（${m.dividend_hide_reason}）` : ''}</div>
+      <div className="dividend-calc-grid">
+        <span>今期予想配当:<b>{yenText(m.dividend_forecast_per_share)}</b></span>
+        <span>今期予想EPS:<b>{yenText(m.dividend_forecast_eps)}</b></span>
+        <span>配当利回り:<b>{pctText(m.dividend_yield_pct)}</b></span>
+        <span>配当性向:<b>{pctText(m.dividend_payout_ratio_pct)}</b></span>
+        <span>開示日:<b>{m.dividend_disclosure_date || '-'}</b></span>
+        <span>鮮度:<b>{m.dividend_data_age_days !== null && m.dividend_data_age_days !== undefined ? `${m.dividend_data_age_days}日` : '-'}</b></span>
+      </div>
+      <div className="dividend-formula">利回り = {m.dividend_yield_formula || '-'} / 性向 = {m.dividend_payout_formula || '-'}</div>
+    </div>
+  );
+}
+
 function formatJst(value: any) {
   if (!value) return '未実行';
   const date = new Date(value);
@@ -378,6 +424,7 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         </div>
       </div>
       <ScoreHistory row={row} />
+      <DividendLine row={row} isAdmin={isAdmin} />
       <div className="stock-tags">
         {shownTags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}
         {tags.length > shownTags.length ? <span className="badge gray">+{tags.length - shownTags.length}</span> : null}
