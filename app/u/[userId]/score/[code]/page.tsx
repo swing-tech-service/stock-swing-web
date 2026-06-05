@@ -81,103 +81,51 @@ async function getLatestResult(userId: string, code: string) {
   return { run, row: result.data as ResultRow };
 }
 
+function pt(m: Record<string, any>, key: string, fallback: number) {
+  const p = m.score_points || {};
+  return typeof p[key] === 'number' ? p[key] : fallback;
+}
+
 function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
   const m = metrics || {};
   const c = m.conditions || {};
+  const item = (no: string, key: string, title: string, criterion: string, actual: string, ng: string, fallbackPoint: number): ConditionView => ({
+    no,
+    title: `${title}（${pt(m, key, fallbackPoint)}点）`,
+    ok: !!c[key],
+    criterion,
+    actual,
+    ng,
+  });
   return [
-    {
-      no: '①', title: '日足5MA < 株価', ok: !!c.c01,
-      criterion: '終値 > 日足5MA',
-      actual: `終値 ${fmt(m.close)} / 5MA ${fmt(m.daily_sma5)}`,
-      ng: '終値が5MA以下です。短期の上向き確認が弱い状態です。',
-    },
-    {
-      no: '②', title: '日足5MAの傾きが正', ok: !!c.c02,
-      criterion: '最新5MA - 前日5MA >= 0',
-      actual: `最新5MA ${fmt(m.daily_sma5)} / 前日5MA ${fmt(m.prev_daily_sma5)} / 差 ${fmt(m.daily_sma5_slope)}`,
-      ng: '5MAが前日比で下向きです。',
-    },
-    {
-      no: '③', title: '日足5MA > 日足25MA', ok: !!c.c03,
-      criterion: '日足5MA > 日足25MA',
-      actual: `5MA ${fmt(m.daily_sma5)} / 25MA ${fmt(m.daily_sma25)}`,
-      ng: '短期線が25MAを上回っていません。',
-    },
-    {
-      no: '④', star: true, title: '週足13MA > 26MA > 52MA', ok: !!c.c04,
-      criterion: '13週MA > 26週MA > 52週MA',
-      actual: `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)}`,
-      ng: '週足の移動平均線が上昇順に並んでいません。',
-    },
-    {
-      no: '⑤', star: true, title: '週足13MAの傾きが正', ok: !!c.c05,
-      criterion: '最新13週MA - 前週13週MA >= 0',
-      actual: `最新13MA ${fmt(m.weekly_sma13)} / 前週13MA ${fmt(m.prev_weekly_sma13)} / 差 ${fmt(m.weekly_sma13_slope)}`,
-      ng: '13週MAが前週比で下向きです。',
-    },
-    {
-      no: '⑥', title: '週足13MAからの+乖離率10%以下', ok: !!c.c06,
-      criterion: '週足終値 / 13週MA - 1 <= 10%',
-      actual: `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)} / 乖離 ${fmt(m.weekly_sma13_gap_pct, '%')}`,
-      ng: '13週MAから上に離れすぎています。',
-    },
-    {
-      no: '⑦', title: '日足BBが+1σ以上または-1σ以下', ok: !!c.c07,
-      criterion: '終値 >= 日足+1σ または 終値 <= 日足-1σ',
-      actual: `終値 ${fmt(m.close)} / +1σ ${fmt(m.daily_bb_upper1)} / -1σ ${fmt(m.daily_bb_lower1)} / 位置 ${fmt(m.daily_bb_position)}`,
-      ng: '日足終値が-1σ〜+1σの範囲内です。',
-    },
-    {
-      no: '⑧', star: true, title: '週足BB条件', ok: !!c.c08,
-      criterion: '週足終値 <= +2σ かつ、週足BB幅拡大または終値 >= +1σ',
-      actual: `週足終値 ${fmt(m.weekly_close)} / 週+1σ ${fmt(m.weekly_bb_upper1)} / 週+2σ ${fmt(m.weekly_bb_upper2)} / BB幅 ${fmt(m.weekly_bb_width)} / 前週BB幅 ${fmt(m.prev_weekly_bb_width)}`,
-      ng: '週足のBB位置・拡大条件を満たしていません。',
-    },
-    {
-      no: '⑨', title: '日足MACD条件', ok: !!c.c09,
-      criterion: 'MACD > Signal または MACDヒストグラムが前日より改善',
-      actual: `MACD ${fmt(m.daily_macd)} / Signal ${fmt(m.daily_macd_signal)} / Hist ${fmt(m.daily_macd_hist)} / 前日Hist ${fmt(m.prev_daily_macd_hist)}`,
-      ng: '日足MACDがシグナル以下で、ヒストグラム改善も確認できません。',
-    },
-    {
-      no: '⑩', star: true, title: '週足MACD GC後', ok: !!c.c10,
-      criterion: '週足MACD > 週足Signal',
-      actual: `週MACD ${fmt(m.weekly_macd)} / 週Signal ${fmt(m.weekly_macd_signal)}`,
-      ng: '週足MACDがシグナルを上回っていません。',
-    },
-    {
-      no: '⑪', title: '日足RSI 10以下 or 60以上', ok: !!c.c11,
-      criterion: '日足RSI <= 10 または >= 60',
-      actual: `日足RSI ${fmt(m.daily_rsi14)}`,
-      ng: '日足RSIが10以下でも60以上でもありません。',
-    },
-    {
-      no: '⑫', title: '週足RSI 10以下 or 60以上', ok: !!c.c12,
-      criterion: '週足RSI <= 10 または >= 60',
-      actual: `週足RSI ${fmt(m.weekly_rsi14)}`,
-      ng: '週足RSIが10以下でも60以上でもありません。',
-    },
-    {
-      no: '⑬', title: '日足一目雲より株価が上', ok: !!c.c13,
-      criterion: '終値 > 日足雲上限',
-      actual: `終値 ${fmt(m.close)} / 日足雲上限 ${fmt(m.daily_ichimoku_cloud_upper)}`,
-      ng: '終値が日足雲上限を上回っていません。',
-    },
-    {
-      no: '⑭', star: true, title: '週足一目雲より株価が上', ok: !!c.c14,
-      criterion: '週足終値 > 週足雲上限',
-      actual: `週足終値 ${fmt(m.weekly_close)} / 週足雲上限 ${fmt(m.weekly_ichimoku_cloud_upper)}`,
-      ng: '週足終値が週足雲上限を上回っていません。',
-    },
-    {
-      no: '⑮', star: true, title: '週足13MAサポート/上向き条件', ok: !!c.c15,
-      criterion: '週足終値 < 13週MA または 13週MA傾き >= 0',
-      actual: `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)} / 13MA傾き ${fmt(m.weekly_sma13_slope)}`,
-      ng: '週足終値が13週MAより下ではなく、かつ13週MAも上向きではありません。',
-    },
+    item('①', 'c01', '日足終値 > 日足5MA', '終値 > 日足5MA', `終値 ${fmt(m.close)} / 5MA ${fmt(m.daily_sma5)}`, '終値が5MA以下です。', 1),
+    item('②', 'c02', '日足5MAの傾きが0以上', '最新5MA - 前日5MA >= 0', `最新5MA ${fmt(m.daily_sma5)} / 前日5MA ${fmt(m.prev_daily_sma5)} / 差 ${fmt(m.daily_sma5_slope)}`, '5MAが前日比で下向きです。', 2),
+    item('③', 'c03', '日足5MA > 日足25MA', '日足5MA > 日足25MA', `5MA ${fmt(m.daily_sma5)} / 25MA ${fmt(m.daily_sma25)}`, '5MAが25MA以下です。', 1),
+    item('④', 'c04', '週足MAの上昇配列', '13週MA > 26週MA > 52週MA', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)}`, '週足MAが上昇配列ではありません。', 2),
+    item('⑤', 'c05', '週足13MAの傾きが0以上', '最新13週MA - 前週13週MA >= 0', `最新13MA ${fmt(m.weekly_sma13)} / 前週13MA ${fmt(m.prev_weekly_sma13)} / 差 ${fmt(m.weekly_sma13_slope)}`, '13週MAが前週比で下向きです。', 2),
+    item('⑥', 'c06', '週足終値が13週MAから+10%以内', '週足終値 / 13週MA - 1 <= 10%', `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)} / 乖離 ${fmt(m.weekly_sma13_gap_pct, '%')}`, '13週MAから上に離れすぎています。', 2),
+    item('⑦', 'c07', '廃止: 日足BB±1σ接触', '廃止条件のため常に0点', `終値 ${fmt(m.close)} / +1σ ${fmt(m.daily_bb_upper1)} / -1σ ${fmt(m.daily_bb_lower1)} / 位置 ${fmt(m.daily_bb_position)}`, '廃止条件です。', 0),
+    item('⑧', 'c08', '週足BB拡大', '週足BB幅 >= 前週BB幅', `BB幅 ${fmt(m.weekly_bb_width)} / 前週BB幅 ${fmt(m.prev_weekly_bb_width)}`, '週足BB幅が前週以上に拡大していません。', 2),
+    item('⑨', 'c09', '日足MACD良好', '日足MACD > 日足Signal', `MACD ${fmt(m.daily_macd)} / Signal ${fmt(m.daily_macd_signal)}`, '日足MACDがSignal以下です。', 2),
+    item('⑩', 'c10', '週足MACD良好', '週足MACD > 週足Signal', `週MACD ${fmt(m.weekly_macd)} / 週Signal ${fmt(m.weekly_macd_signal)}`, '週足MACDがSignal以下です。', 2),
+    item('⑪', 'c11', '日足RSI9条件', 'RSI9<=10かつ傾き負、または60<=RSI9<=80かつ傾き正', `RSI9 ${fmt(m.daily_rsi9)} / 前日RSI9 ${fmt(m.prev_daily_rsi9)} / 傾き ${fmt(m.daily_rsi9_slope)}`, '日足RSI9条件を満たしていません。', 2),
+    item('⑫', 'c12', '週足RSI14条件', 'RSI14<=10かつ傾き負、または60<=RSI14<=80かつ傾き正', `RSI14 ${fmt(m.weekly_rsi14)} / 前週RSI14 ${fmt(m.prev_weekly_rsi14)} / 傾き ${fmt(m.weekly_rsi14_slope)}`, '週足RSI14条件を満たしていません。', 2),
+    item('⑬', 'c13', '日足終値が一目雲上限より上', '終値 > 日足雲上限', `終値 ${fmt(m.close)} / 日足雲上限 ${fmt(m.daily_ichimoku_cloud_upper)}`, '終値が日足雲上限を上回っていません。', 2),
+    item('⑭', 'c14', '廃止: 週足終値が一目雲上限より上', '廃止条件のため常に0点', `週足終値 ${fmt(m.weekly_close)} / 週足雲上限 ${fmt(m.weekly_ichimoku_cloud_upper)}`, '廃止条件です。', 0),
+    item('⑮', 'c15', '週足13MAサポート', '週足終値 < 13週MA', `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)}`, '週足終値が13週MAより下ではありません。', 2),
+    item('⑯', 'c16', '日足BB収斂5日以上', 'BB2σ幅/終値 <= 10% が5日以上継続', `現在BB2σ幅 ${fmt(m.daily_bb_2sigma_width_pct, '%')}`, 'BB2σ幅10%以内が5日以上継続していません。', 2),
+    item('⑰', 'c17', '日足BB幅20%以下', 'BB2σ幅/終値 <= 20%', `現在BB2σ幅 ${fmt(m.daily_bb_2sigma_width_pct, '%')}`, '日足BB2σ幅が20%を超えています。', 3),
+    item('⑱', 'c18', '日足BB収斂から拡大', 'BB2σ幅10%以内から1割増となった日が3営業日以内', `基準 ${fmt(m.daily_bb_expand_base_width_pct, '%')} / 拡大 ${fmt(m.daily_bb_expand_signal_width_pct, '%')} / 日付 ${fmt(m.daily_bb_expand_signal_date)} / 経過 ${fmt(m.daily_bb_expand_days_since)}`, '日足BB収斂から拡大の条件を満たしていません。', 5),
+    item('⑲', 'c19', '日足MACDのGCから3日以内', '日足MACDがSignalを上抜けて3営業日以内', `GC日 ${fmt(m.daily_macd_gc_date)} / 経過 ${fmt(m.daily_macd_gc_days_since)}`, '日足MACD GCから3営業日以内ではありません。', 3),
+    item('⑳', 'c20', '週足MACDのGCから3週以内', '週足MACDがSignalを上抜けて3週以内', `GC週 ${fmt(m.weekly_macd_gc_date)} / 経過 ${fmt(m.weekly_macd_gc_days_since)}`, '週足MACD GCから3週以内ではありません。', 3),
+    item('㉑', 'c21', '日足RSI9低位反転継続', 'RSI9<=10かつ傾き0以上発生後、RSI9<=20が継続', `RSI9 ${fmt(m.daily_rsi9)} / 発生日 ${fmt(m.daily_rsi_low_trigger_date)} / 経過 ${fmt(m.daily_rsi_low_days_since)}`, '日足RSI9低位反転継続条件を満たしていません。', 5),
+    item('㉒', 'c22', '週足RSI14低位反転継続', 'RSI14<=10かつ傾き0以上発生後、RSI14<=20が継続', `RSI14 ${fmt(m.weekly_rsi14)} / 発生日 ${fmt(m.weekly_rsi_low_trigger_date)} / 経過 ${fmt(m.weekly_rsi_low_days_since)}`, '週足RSI14低位反転継続条件を満たしていません。', 5),
+    item('㉓', 'c23', '週足BB収斂から拡大', '週足BB2σ幅10%以内から1割増となった週が2週以内', `基準 ${fmt(m.weekly_bb_expand_base_width_pct, '%')} / 拡大 ${fmt(m.weekly_bb_expand_signal_width_pct, '%')} / 日付 ${fmt(m.weekly_bb_expand_signal_date)} / 経過 ${fmt(m.weekly_bb_expand_days_since)}`, '週足BB収斂から拡大の条件を満たしていません。', 5),
+    item('㉔', 'c24', '日足MA収斂', '5MA/25MA/75MAが5%以内、5MAが最上位、5MA傾き正', `5MA ${fmt(m.daily_sma5)} / 25MA ${fmt(m.daily_sma25)} / 75MA ${fmt(m.daily_sma75)} / 収斂幅 ${fmt(m.daily_ma_convergence_gap_pct, '%')}`, '日足MA収斂条件を満たしていません。', 4),
+    item('㉕', 'c25', '週足MA収斂', '13MA/26MA/52MAが10%以内、13MAが最上位、13MA傾き正', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)} / 収斂幅 ${fmt(m.weekly_ma_convergence_gap_pct, '%')}`, '週足MA収斂条件を満たしていません。', 4),
+    item('㉖', 'c26', '日足一目雲のねじれ±5営業日以内', '一目均衡表の雲のねじれが現在±5営業日以内', `ねじれ日 ${fmt(m.daily_ichimoku_twist_date)} / 現在から ${fmt(m.daily_ichimoku_twist_days_to)}営業日 / ${fmt(m.daily_ichimoku_twist_reason)}`, '一目雲のねじれが±5営業日以内にありません。', 4),
   ];
 }
-
 
 function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'daily' | 'weekly'; metrics: Record<string, any> | null | undefined }) {
   const m = metrics || {};
@@ -244,11 +192,11 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
             <div className="cards">
               <div className="card">スコア<br /><b>{fmt(row.score)}</b></div>
               <div className="card">達成<br /><b>{fmt(row.condition_count)}</b></div>
-              <div className="card">未達★<br /><b>{fmt(row.failed_star_numbers)}</b></div>
+              <div className="card">高配点未達<br /><b>{fmt(row.failed_star_numbers)}</b></div>
               <div className="card">現在値<br /><b>{fmt(row.close)}</b></div>
             </div>
             <section className="section">
-              <h2>15条件の達成状況</h2>
+              <h2>スコア条件の達成状況</h2>
               <table>
                 <thead><tr><th>No</th><th>結果</th><th>条件</th><th>判定基準</th><th>現在値・指標</th><th>未達の場合の見方</th></tr></thead>
                 <tbody>
