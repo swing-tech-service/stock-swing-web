@@ -112,7 +112,7 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
     item('⑫', 'c12', '週足RSI14条件', 'RSI14<=10かつ傾き負、または60<=RSI14<=80かつ傾き正', `RSI14 ${fmt(m.weekly_rsi14)} / 前週RSI14 ${fmt(m.prev_weekly_rsi14)} / 傾き ${fmt(m.weekly_rsi14_slope)}`, '週足RSI14条件を満たしていません。', 2),
     item('⑬', 'c13', '日足終値が一目雲上限より上', '終値 > 日足雲上限', `終値 ${fmt(m.close)} / 日足雲上限 ${fmt(m.daily_ichimoku_cloud_upper)}`, '終値が日足雲上限を上回っていません。', 2),
     item('⑭', 'c14', '廃止: 週足終値が一目雲上限より上', '廃止条件のため常に0点', `週足終値 ${fmt(m.weekly_close)} / 週足雲上限 ${fmt(m.weekly_ichimoku_cloud_upper)}`, '廃止条件です。', 0),
-    item('⑮', 'c15', '週足13MAサポート', '週足終値 < 13週MA', `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)}`, '週足終値が13週MAより下ではありません。', 2),
+    item('⑮', 'c15', '週足13MA上抜け', '週足終値 > 13週MA', `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)}`, '週足終値が13週MAより上ではありません。', 2),
     item('⑯', 'c16', '日足BB収斂5日以上', 'BB2σ幅/終値 <= 10% が5日以上継続', `現在BB2σ幅 ${fmt(m.daily_bb_2sigma_width_pct, '%')}`, 'BB2σ幅10%以内が5日以上継続していません。', 2),
     item('⑰', 'c17', '日足BB幅20%以下', 'BB2σ幅/終値 <= 20%', `現在BB2σ幅 ${fmt(m.daily_bb_2sigma_width_pct, '%')}`, '日足BB2σ幅が20%を超えています。', 3),
     item('⑱', 'c18', '日足BB収斂から拡大', 'BB2σ幅10%以内から1割増となった日が3営業日以内', `基準 ${fmt(m.daily_bb_expand_base_width_pct, '%')} / 拡大 ${fmt(m.daily_bb_expand_signal_width_pct, '%')} / 日付 ${fmt(m.daily_bb_expand_signal_date)} / 経過 ${fmt(m.daily_bb_expand_days_since)}`, '日足BB収斂から拡大の条件を満たしていません。', 5),
