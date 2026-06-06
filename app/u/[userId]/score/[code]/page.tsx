@@ -44,6 +44,8 @@ function formatJst(value: any) {
   }).format(date) + ' JST';
 }
 
+const ADMIN_USER_ID = 'takashimasaakiadmin';
+
 const HIDDEN_TAGS = new Set([
   'TRADE READY', 'TRADEREADY', 'ボラOK', 'ボラ不足', 'ボラ判定不可',
   '出来高OK', '出来高強い', '出来高不足', '出来高判定不可',
@@ -101,7 +103,7 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
     item('①', 'c01', '日足終値 > 日足5MA', '終値 > 日足5MA', `終値 ${fmt(m.close)} / 5MA ${fmt(m.daily_sma5)}`, '終値が5MA以下です。', 1),
     item('②', 'c02', '日足5MAの傾きが0以上', '最新5MA - 前日5MA >= 0', `最新5MA ${fmt(m.daily_sma5)} / 前日5MA ${fmt(m.prev_daily_sma5)} / 差 ${fmt(m.daily_sma5_slope)}`, '5MAが前日比で下向きです。', 2),
     item('③', 'c03', '日足5MA > 日足25MA', '日足5MA > 日足25MA', `5MA ${fmt(m.daily_sma5)} / 25MA ${fmt(m.daily_sma25)}`, '5MAが25MA以下です。', 1),
-    item('④', 'c04', '週足MAの上昇配列', '13週MA > 26週MA > 52週MA', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)}`, '週足MAが上昇配列ではありません。', 2),
+    item('④', 'c04', '週足MAの上昇配列', '原則: 13週MA > 26週MA > 52週MA。52週MA未算出時は52週MAを対象外とし、13週MA > 26週MAで判定', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)} / 判定 ${fmt(m.weekly_ma_order_rule)} / 対象外 ${Array.isArray(m.weekly_ma_order_excluded) && m.weekly_ma_order_excluded.length ? m.weekly_ma_order_excluded.join('・') : '-'}`, '週足MAが上昇配列ではありません。', 2),
     item('⑤', 'c05', '週足13MAの傾きが0以上', '最新13週MA - 前週13週MA >= 0', `最新13MA ${fmt(m.weekly_sma13)} / 前週13MA ${fmt(m.prev_weekly_sma13)} / 差 ${fmt(m.weekly_sma13_slope)}`, '13週MAが前週比で下向きです。', 2),
     item('⑥', 'c06', '週足終値が13週MAから+10%以内', '週足終値 / 13週MA - 1 <= 10%', `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)} / 乖離 ${fmt(m.weekly_sma13_gap_pct, '%')}`, '13週MAから上に離れすぎています。', 2),
     item('⑦', 'c07', '廃止: 日足BB±1σ接触', '廃止条件のため常に0点', `終値 ${fmt(m.close)} / +1σ ${fmt(m.daily_bb_upper1)} / -1σ ${fmt(m.daily_bb_lower1)} / 位置 ${fmt(m.daily_bb_position)}`, '廃止条件です。', 0),
@@ -122,9 +124,72 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
     item('㉒', 'c22', '週足RSI14低位反転継続', 'RSI14<=10かつ傾き0以上発生後、RSI14<=20が継続', `RSI14 ${fmt(m.weekly_rsi14)} / 発生日 ${fmt(m.weekly_rsi_low_trigger_date)} / 経過 ${fmt(m.weekly_rsi_low_days_since)}`, '週足RSI14低位反転継続条件を満たしていません。', 5),
     item('㉓', 'c23', '週足BB収斂から拡大', '週足BB2σ幅10%以内から1割増となった週が2週以内', `基準 ${fmt(m.weekly_bb_expand_base_width_pct, '%')} / 拡大 ${fmt(m.weekly_bb_expand_signal_width_pct, '%')} / 日付 ${fmt(m.weekly_bb_expand_signal_date)} / 経過 ${fmt(m.weekly_bb_expand_days_since)}`, '週足BB収斂から拡大の条件を満たしていません。', 5),
     item('㉔', 'c24', '日足MA収斂', '5MA/25MA/75MAが5%以内、5MAが最上位、5MA傾き正', `5MA ${fmt(m.daily_sma5)} / 25MA ${fmt(m.daily_sma25)} / 75MA ${fmt(m.daily_sma75)} / 収斂幅 ${fmt(m.daily_ma_convergence_gap_pct, '%')}`, '日足MA収斂条件を満たしていません。', 4),
-    item('㉕', 'c25', '週足MA収斂', '13MA/26MA/52MAが10%以内、13MAが最上位、13MA傾き正', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)} / 収斂幅 ${fmt(m.weekly_ma_convergence_gap_pct, '%')}`, '週足MA収斂条件を満たしていません。', 4),
+    item('㉕', 'c25', '週足MA収斂', '原則: 13MA/26MA/52MAが10%以内、13MAが最上位、13MA傾き正。52MA未算出時は52MAを対象外とし、13MA/26MAが10%以内で判定', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)} / 収斂幅 ${fmt(m.weekly_ma_convergence_gap_pct, '%')} / 判定 ${fmt(m.weekly_ma_convergence_rule)} / 対象外 ${Array.isArray(m.weekly_ma_convergence_excluded) && m.weekly_ma_convergence_excluded.length ? m.weekly_ma_convergence_excluded.join('・') : '-'}`, '週足MA収斂条件を満たしていません。', 4),
     item('㉖', 'c26', '日足一目雲のねじれ±5営業日以内', '一目均衡表の雲のねじれが現在±5営業日以内', `ねじれ日 ${fmt(m.daily_ichimoku_twist_date)} / 現在から ${fmt(m.daily_ichimoku_twist_days_to)}営業日 / ${fmt(m.daily_ichimoku_twist_reason)}`, '一目雲のねじれが±5営業日以内にありません。', 4),
   ];
+}
+
+
+const SCORE_GROUP_ORDER = [
+  ['ma', 'MA'],
+  ['bb', 'BB'],
+  ['macd', 'MACD'],
+  ['rsi', 'RSI'],
+  ['cloud', '雲'],
+] as const;
+
+function ScoreCategoryHistoryTable({ metrics, isAdmin }: { metrics: Record<string, any> | null | undefined; isAdmin: boolean }) {
+  if (!isAdmin) return null;
+  const rows = Array.isArray(metrics?.score_category_history_10d) ? metrics?.score_category_history_10d : [];
+  if (!rows.length) {
+    return (
+      <section className="section">
+        <h2>カテゴリ別スコア推移（管理者）</h2>
+        <p>10営業日分のカテゴリ別スコア履歴がありません。再分析後に表示されます。</p>
+      </section>
+    );
+  }
+  const groupText = (row: any, key: string) => {
+    const g = row?.groups?.[key];
+    if (!g) return '-';
+    return `${fmt(g.score)} / ${fmt(g.max)}`;
+  };
+  const achievedText = (row: any, key: string) => {
+    const g = row?.groups?.[key];
+    if (!g || !Array.isArray(g.achieved) || !g.achieved.length) return '-';
+    return g.achieved.map((x: string) => x.replace('c', '')).join(',' );
+  };
+  return (
+    <section className="section">
+      <h2>カテゴリ別スコア推移（管理者・10営業日）</h2>
+      <p className="meta">MA / BB / MACD / RSI / 雲の5分類で、各日付時点の条件スコアを集計します。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th><th>区分</th><th>総合</th>
+            {SCORE_GROUP_ORDER.map(([key, label]) => <th key={key}>{label}</th>)}
+            <th>達成条件</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row: any) => (
+            <tr key={`${row.date}-${row.label}`}>
+              <td>{fmt(row.date)}</td>
+              <td>{fmt(row.label)}</td>
+              <td><b>{fmt(row.score)}</b></td>
+              {SCORE_GROUP_ORDER.map(([key]) => <td key={key}>{groupText(row, key)}</td>)}
+              <td>
+                {SCORE_GROUP_ORDER.map(([key, label]) => (
+                  <div key={key}><b>{label}</b>: {achievedText(row, key)}</div>
+                ))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="meta">分類: MA=①②③④⑤⑥⑮㉔㉕ / BB=⑦⑧⑯⑰⑱㉓ / MACD=⑨⑩⑲⑳ / RSI=⑪⑫㉑㉒ / 雲=⑬⑭㉖</p>
+    </section>
+  );
 }
 
 function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'daily' | 'weekly'; metrics: Record<string, any> | null | undefined }) {
@@ -160,6 +225,7 @@ function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'dai
 
 export default async function ScoreDetail({ params }: { params: Promise<{ userId: string; code: string }> }) {
   const { userId, code } = await params;
+  const isAdmin = userId === ADMIN_USER_ID;
   let run: any = null;
   let row: ResultRow | null = null;
   let errorMessage = '';
@@ -195,6 +261,7 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
               <div className="card">高配点未達<br /><b>{fmt(row.failed_star_numbers)}</b></div>
               <div className="card">現在値<br /><b>{fmt(row.close)}</b></div>
             </div>
+            <ScoreCategoryHistoryTable metrics={row.metrics} isAdmin={isAdmin} />
             <section className="section">
               <h2>スコア条件の達成状況</h2>
               <table>
