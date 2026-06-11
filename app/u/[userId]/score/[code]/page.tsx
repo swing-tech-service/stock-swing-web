@@ -106,7 +106,7 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
     item('④', 'c04', '週足MAの上昇配列', '原則: 13週MA > 26週MA > 52週MA。52週MA未算出時は52週MAを対象外とし、13週MA > 26週MAで判定', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)} / 判定 ${fmt(m.weekly_ma_order_rule)} / 対象外 ${Array.isArray(m.weekly_ma_order_excluded) && m.weekly_ma_order_excluded.length ? m.weekly_ma_order_excluded.join('・') : '-'}`, '週足MAが上昇配列ではありません。', 2),
     item('⑤', 'c05', '週足13MAの傾きが0以上', '最新13週MA - 前週13週MA >= 0', `最新13MA ${fmt(m.weekly_sma13)} / 前週13MA ${fmt(m.prev_weekly_sma13)} / 差 ${fmt(m.weekly_sma13_slope)}`, '13週MAが前週比で下向きです。', 2),
     item('⑥', 'c06', '週足終値が13週MAから+10%以内', '週足終値 / 13週MA - 1 <= 10%', `週足終値 ${fmt(m.weekly_close)} / 13MA ${fmt(m.weekly_sma13)} / 乖離 ${fmt(m.weekly_sma13_gap_pct, '%')}`, '13週MAから上に離れすぎています。', 2),
-    item('⑦', 'c07', '廃止: 日足BB±1σ接触', '廃止条件のため常に0点', `終値 ${fmt(m.close)} / +1σ ${fmt(m.daily_bb_upper1)} / -1σ ${fmt(m.daily_bb_lower1)} / 位置 ${fmt(m.daily_bb_position)}`, '廃止条件です。', 0),
+    item('⑦', 'c07', '日足200MA割れペナルティ', '日足終値 < 日足200MA の場合は減点', `終値 ${fmt(m.close)} / 200MA ${fmt(m.daily_sma200)} / 判定 ${m.daily_close_below_sma200_penalty ? '減点対象' : '対象外'}`, '日足終値が200MAを下回っているため、-2点です。', -2),
     item('⑧', 'c08', '週足BB拡大', '週足BB幅 >= 前週BB幅', `BB幅 ${fmt(m.weekly_bb_width)} / 前週BB幅 ${fmt(m.prev_weekly_bb_width)}`, '週足BB幅が前週以上に拡大していません。', 2),
     item('⑨', 'c09', '日足MACD良好', '日足MACD > 日足Signal', `MACD ${fmt(m.daily_macd)} / Signal ${fmt(m.daily_macd_signal)}`, '日足MACDがSignal以下です。', 2),
     item('⑩', 'c10', '週足MACD良好', '週足MACD > 週足Signal', `週MACD ${fmt(m.weekly_macd)} / 週Signal ${fmt(m.weekly_macd_signal)}`, '週足MACDがSignal以下です。', 2),
