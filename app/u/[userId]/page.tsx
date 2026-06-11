@@ -505,6 +505,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
         </section>
 
         <section className="summary-strip">
+          <div><span>監視銘柄数</span><b>{rows.length}</b></div>
           <div><span>{isAdmin ? '監視優先' : '注目候補'}</span><b>{byStatus('WATCH_PRIORITY').length}</b></div>
           <div><span>イベント注意</span><b>{eventCautionCount}</b></div>
           <div><span>イベント前確認</span><b>{eventBeforeCount}</b></div>
