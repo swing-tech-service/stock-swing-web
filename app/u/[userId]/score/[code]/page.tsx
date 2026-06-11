@@ -125,7 +125,7 @@ function buildConditions(metrics: Record<string, any> | null): ConditionView[] {
     item('㉓', 'c23', '週足BB収斂から拡大', '週足BB2σ幅10%以内から1割増となった週が2週以内', `基準 ${fmt(m.weekly_bb_expand_base_width_pct, '%')} / 拡大 ${fmt(m.weekly_bb_expand_signal_width_pct, '%')} / 日付 ${fmt(m.weekly_bb_expand_signal_date)} / 経過 ${fmt(m.weekly_bb_expand_days_since)}`, '週足BB収斂から拡大の条件を満たしていません。', 5),
     item('㉔', 'c24', '日足MA収斂', '5MA/25MA/75MAが5%以内、5MAが最上位、5MA傾き正', `5MA ${fmt(m.daily_sma5)} / 25MA ${fmt(m.daily_sma25)} / 75MA ${fmt(m.daily_sma75)} / 収斂幅 ${fmt(m.daily_ma_convergence_gap_pct, '%')}`, '日足MA収斂条件を満たしていません。', 4),
     item('㉕', 'c25', '週足MA収斂', '原則: 13MA/26MA/52MAが10%以内、13MAが最上位、13MA傾き正。52MA未算出時は52MAを対象外とし、13MA/26MAが10%以内で判定', `13MA ${fmt(m.weekly_sma13)} / 26MA ${fmt(m.weekly_sma26)} / 52MA ${fmt(m.weekly_sma52)} / 収斂幅 ${fmt(m.weekly_ma_convergence_gap_pct, '%')} / 判定 ${fmt(m.weekly_ma_convergence_rule)} / 対象外 ${Array.isArray(m.weekly_ma_convergence_excluded) && m.weekly_ma_convergence_excluded.length ? m.weekly_ma_convergence_excluded.join('・') : '-'}`, '週足MA収斂条件を満たしていません。', 4),
-    item('㉖', 'c26', '日足一目雲のねじれ±5営業日以内', '一目均衡表の雲のねじれが現在±5営業日以内', `ねじれ日 ${fmt(m.daily_ichimoku_twist_date)} / 現在から ${fmt(m.daily_ichimoku_twist_days_to)}営業日 / ${fmt(m.daily_ichimoku_twist_reason)}`, '一目雲のねじれが±5営業日以内にありません。', 4),
+    item('㉖', 'c26', '日足一目雲のねじれ＋10営業日高値', '一目均衡表の雲のねじれが現在±5営業日以内、かつ日足終値が直近10営業日内の終値最高値', `ねじれ日 ${fmt(m.daily_ichimoku_twist_date)} / 現在から ${fmt(m.daily_ichimoku_twist_days_to)}営業日 / 10日高値 ${fmt(m.daily_10d_high_value)} (${fmt(m.daily_10d_high_date)}) / ${fmt(m.daily_ichimoku_twist_reason)} / ${fmt(m.daily_10d_high_reason)}`, '一目雲のねじれ±5営業日以内、または10営業日内高値の条件を満たしていません。', 4),
   ];
 }
 
