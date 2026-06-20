@@ -44,22 +44,58 @@ type MarketEnv = {
 type StatusKey = 'WATCH_PRIORITY' | 'EARNINGS_CAUTION' | 'EARNINGS_EXCLUDE' | 'OUT_OF_SCOPE' | 'WATCH_LIST';
 
 const ADMIN_USER_ID = 'takashimasaakiadmin';
+const POC_CONSENT_VERSION = 'poc_terms_v1';
 
 const STATUS_LABEL_PUBLIC: Record<StatusKey, string> = {
-  WATCH_PRIORITY: '注目候補',
-  EARNINGS_CAUTION: 'イベント注意',
+  WATCH_PRIORITY: '条件一致銘柄',
+  EARNINGS_CAUTION: 'イベント確認',
   EARNINGS_EXCLUDE: 'イベント前確認',
   OUT_OF_SCOPE: '参考確認',
   WATCH_LIST: '通常確認',
 };
 
 const STATUS_LABEL_ADMIN: Record<StatusKey, string> = {
-  WATCH_PRIORITY: '監視優先',
-  EARNINGS_CAUTION: '決算注意',
-  EARNINGS_EXCLUDE: '決算前除外',
-  OUT_OF_SCOPE: 'スコア判定対象外',
-  WATCH_LIST: '通常監視',
+  WATCH_PRIORITY: '確認優先',
+  EARNINGS_CAUTION: 'イベント確認',
+  EARNINGS_EXCLUDE: 'イベント前確認',
+  OUT_OF_SCOPE: '条件判定対象外',
+  WATCH_LIST: '通常確認',
 };
+
+
+async function hasPocConsent(userId: string) {
+  const supabase = supabaseAdmin();
+  const consent = await supabase
+    .from('user_consents')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('consent_type', 'poc_terms')
+    .eq('version', POC_CONSENT_VERSION)
+    .limit(1);
+  if (consent.error) return false;
+  return (consent.data || []).length > 0;
+}
+
+function PocConsentNotice({ userId }: { userId: string }) {
+  return (
+    <main className="wrap premium-wrap">
+      <section className="section consent-box">
+        <h1>PoC利用同意</h1>
+        <p>本ツールは、株価・出来高等の公開情報をもとに、あらかじめ定めたテクニカル条件への一致状況を機械的に整理するPoC検証用ツールです。</p>
+        <p>特定銘柄の取得、売却、保有を推奨するものではありません。</p>
+        <p>損切り、利確、目標株価、売買タイミングは提示しません。</p>
+        <p>表示される条件整理点、ラベル、並び順は、将来の値上がり、利益獲得可能性、投資成果を示すものではありません。</p>
+        <p>投資判断は利用者ご自身の責任で行ってください。</p>
+        <form action="/api/consents/poc" method="POST" className="consent-form">
+          <input type="hidden" name="userId" value={userId} />
+          <input type="hidden" name="version" value={POC_CONSENT_VERSION} />
+          <label className="consent-check"><input type="checkbox" name="agreed" value="yes" required /> 上記内容を確認し、PoC検証用ツールとして利用することに同意します。</label>
+          <button className="btn" type="submit">同意して利用する</button>
+        </form>
+      </section>
+    </main>
+  );
+}
 
 async function getData(userId: string) {
   const supabase = supabaseAdmin();
@@ -142,10 +178,10 @@ function ScoreHistory({ row }: { row: ResultRow }) {
   const mark = scoreTrendMark(history);
   return (
     <div className="score-history" aria-label="5営業日のスコア推移">
-      <span className="score-history-label">5日スコア{mark ? ` ${mark}` : ''}</span>
+      <span className="score-history-label">5日条件整理点{mark ? ` ${mark}` : ''}</span>
       <div className="score-history-pills">
         {history.map((h: any, i: number) => (
-          <span className={`score-pill ${typeof h.score === 'number' ? 'ok' : 'na'}`} key={`${h.date || i}-${i}`} title={`${h.label || ''} ${h.date || ''} 株価:${h.close ?? '-'} score:${h.score ?? '-'}`}>
+          <span className={`score-pill ${typeof h.score === 'number' ? 'ok' : 'na'}`} key={`${h.date || i}-${i}`} title={`${h.label || ''} ${h.date || ''} 株価:${h.close ?? '-'} 条件整理点:${h.score ?? '-'}`}>
             <small>{h.label === '当日' ? '今日' : `${h.offset_business_days}日前`}</small>
             <b>{typeof h.score === 'number' ? h.score : '-'}</b>
           </span>
@@ -171,7 +207,7 @@ function AdminCategoryScoreHistory({ row, isAdmin }: { row: ResultRow; isAdmin: 
   const history = categoryHistory(row);
   if (!history.length) return null;
   return (
-    <div className="admin-cat-history" aria-label="カテゴリ別スコア推移">
+    <div className="admin-cat-history" aria-label="カテゴリ別条件整理点推移">
       <div className="admin-cat-history-title">10日カテゴリスコア</div>
       <div className="admin-cat-history-scroll">
         <table>
@@ -229,7 +265,7 @@ function DividendLine({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
   const visible = m.dividend_visible === true;
   return (
     <div className={`dividend-line admin ${visible ? 'visible' : 'hidden'}`}>
-      <div className="dividend-title">配当参考: {visible ? '表示' : '非表示'}{m.dividend_hide_reason ? `（${m.dividend_hide_reason}）` : ''}</div>
+      <div className="dividend-title">配当情報: {visible ? '表示' : '非表示'}{m.dividend_hide_reason ? `（${m.dividend_hide_reason}）` : ''}</div>
       <div className="dividend-calc-grid">
         <span>今期予想配当:<b>{yenText(m.dividend_forecast_per_share)}</b></span>
         <span>今期予想EPS:<b>{yenText(m.dividend_forecast_eps)}</b></span>
@@ -298,14 +334,14 @@ function shouldShowBbBreakout(row: ResultRow) {
 
 function displayTag(t: string, isAdmin: boolean) {
   if (isAdmin) return t;
-  if (t === '決算直前注意') return 'イベント注意';
+  if (t === '決算直前注意') return 'イベント確認';
   if (t === '決算前除外') return 'イベント前確認';
   return t;
 }
 
 function tagClass(t: string) {
   if (t.includes('イベント前確認') || t.includes('決算前除外')) return 'red';
-  if (t.includes('イベント注意') || t.includes('決算直前注意') || t.startsWith('決算日:')) return 'orange';
+  if (t.includes('イベント確認') || t.includes('決算直前注意') || t.startsWith('決算日:')) return 'orange';
   if (['小型株'].includes(t)) return 'green';
   return 'gray';
 }
@@ -324,7 +360,7 @@ function visibleTags(row: ResultRow, isAdmin: boolean) {
 
   // 横ばいレンジ判定は廃止したため、管理者にも表示しない。
 
-  const rawHasEarnings = tags.some((t) => ['決算直前注意', '決算前除外', 'イベント注意', 'イベント前確認'].includes(t));
+  const rawHasEarnings = tags.some((t) => ['決算直前注意', '決算前除外', 'イベント確認', 'イベント前確認'].includes(t));
   const earningsDate = row.metrics?.next_earnings_date || row.metrics?.earnings_date;
   const md = formatMd(earningsDate);
   if (rawHasEarnings && md) tags.push(`決算日:${md}`);
@@ -342,10 +378,10 @@ function hasAnyTag(row: ResultRow, words: string[], isAdmin: boolean) {
 
 function statusOf(row: ResultRow, isAdmin: boolean): StatusKey {
   const tags = visibleTags(row, isAdmin);
-  // ボラ・出来高未達は参考確認リストへ。ただしイベントタグは同じ行に表示する。
+  // ボラ・出来高未達は参考確認へ。ただしイベントタグは同じ行に表示する。
   if (!isScored(row)) return 'OUT_OF_SCOPE';
   if (tags.some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))) return 'EARNINGS_EXCLUDE';
-  if (tags.some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))) return 'EARNINGS_CAUTION';
+  if (tags.some((t) => t.includes('イベント確認') || t.includes('決算直前注意'))) return 'EARNINGS_CAUTION';
   if (Number(row.score) >= 22) return 'WATCH_PRIORITY';
   return 'WATCH_LIST';
 }
@@ -354,9 +390,9 @@ function reasonsOf(row: ResultRow, isAdmin: boolean) {
   if (!isAdmin) return [];
   const tags = visibleTags(row, true);
   const reasons: string[] = [];
-  if (!isScored(row)) reasons.push('出来高またはボラ条件未達のためスコア判定対象外');
+  if (!isScored(row)) reasons.push('出来高またはボラ条件未達のため条件判定対象外');
   else reasons.push('出来高・ボラティリティ条件をクリア');
-  if (Number(row.score) >= 22) reasons.push('独自スコアが上位水準');
+  if (Number(row.score) >= 22) reasons.push('条件整理点が相対的に高い水準');
   if (tags.includes('決算直前注意')) reasons.push('決算直前のため注意');
   if (tags.includes('決算前除外')) reasons.push('決算前除外条件に該当');
   return Array.from(new Set(reasons)).slice(0, 3);
@@ -365,13 +401,13 @@ function reasonsOf(row: ResultRow, isAdmin: boolean) {
 function fallbackMarketTone(rows: ResultRow[], isAdmin: boolean) {
   const scored = rows.filter(isScored);
   const high = scored.filter((r) => Number(r.score) >= 22).length;
-  const risk = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('イベント注意') || t.includes('決算'))).length;
+  const risk = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('イベント確認') || t.includes('決算'))).length;
   const ratio = scored.length ? high / scored.length : 0;
   const score = ratio * 2 - Math.min(risk, 5) * 0.15;
-  if (score >= 1.6) return { label: 'やや強気', stars: '★★★★☆', comment: '確認候補が多く、比較的整理しやすい状況です。' };
+  if (score >= 1.6) return { label: '条件一致やや多め', stars: '★★★★☆', comment: '確認候補が多く、比較的整理しやすい状況です。' };
   if (score >= 0.9) return { label: '中立', stars: '★★★☆☆', comment: '候補はあります。イベントと株価位置を確認しながら選別します。' };
-  if (score >= 0.4) return { label: 'やや慎重', stars: '★★☆☆☆', comment: '確認候補を絞り、イベント前の銘柄に注意します。' };
-  return { label: '慎重', stars: '★☆☆☆☆', comment: '無理に対象を広げず、確認候補を絞ります。' };
+  if (score >= 0.4) return { label: '確認やや控えめ', stars: '★★☆☆☆', comment: '確認候補を絞り、イベント前の銘柄に注意します。' };
+  return { label: '確認控えめ', stars: '★☆☆☆☆', comment: '無理に対象を広げず、確認候補を絞ります。' };
 }
 
 function IndexCard({ item, isAdmin }: { item: MarketIndex; isAdmin: boolean }) {
@@ -423,7 +459,7 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         <StatusPill status={status} isAdmin={isAdmin} />
         <div className="stock-title"><b>{row.code}</b><span>{row.name || ''}</span></div>
         <div className="stock-numbers">
-          <span>S<b>{isScored(row) ? fmt(row.score) : '-'}</b></span>
+          <span>条件整理点<b>{isScored(row) ? fmt(row.score) : '-'}</b></span>
           <span>株価:<b>{fmt(row.close)}</b></span>
         </div>
       </div>
@@ -455,6 +491,15 @@ function Section({ title, subtitle, rows, userId, isAdmin }: { title: string; su
 export default async function Dashboard({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
   const isAdmin = userId === ADMIN_USER_ID;
+  const consentOk = await hasPocConsent(userId);
+  if (!consentOk) {
+    return (
+      <>
+        <header className="hero premium-hero"><div className="eyebrow">PoC / Beta</div><h1>銘柄整理ダッシュボード</h1><p className="hero-lead">PoC検証用ツールとしての利用同意が必要です。</p></header>
+        <PocConsentNotice userId={userId} />
+      </>
+    );
+  }
   let data: { run: any; rows: ResultRow[]; marketEnv?: MarketEnv };
   let errorMessage = '';
 
@@ -473,15 +518,15 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
   const marketEnv = data.marketEnv;
   const tone = marketEnv?.label ? { label: marketEnv.label, stars: marketEnv.stars || fallbackTone.stars, comment: marketEnv.comment || fallbackTone.comment } : fallbackTone;
   const outRows = byStatus('OUT_OF_SCOPE');
-  const eventCautionCount = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント注意') || t.includes('決算直前注意'))).length;
+  const eventCautionCount = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント確認') || t.includes('決算直前注意'))).length;
   const eventBeforeCount = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))).length;
 
   return (
     <>
       <header className="hero premium-hero">
-        <div className="eyebrow">Premium Swing Screening {isAdmin ? ' / Admin' : ''}</div>
-        <h1>スイング監視ダッシュボード</h1>
-        <p className="hero-lead">テクニカルとイベントからあなたの銘柄を整理します。</p>
+        <div className="eyebrow">PoC Technical Organizer {isAdmin ? ' / Admin' : ''}</div>
+        <h1>銘柄整理ダッシュボード</h1>
+        <p className="hero-lead">登録銘柄について、テクニカル条件とイベント情報を機械的に整理します。</p>
         <p className="meta">ユーザ: {userId} / 最終更新: {lastUpdated} / 毎日16:30 JST頃から更新開始</p>
       </header>
       <main className="wrap premium-wrap">
@@ -492,7 +537,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
             <span className="panel-label">市場環境メーター</span>
             <h2>{tone.label} <em>{tone.stars}</em></h2>
             <p>{tone.comment}</p>
-            {isAdmin ? <small>{marketEnv?.note || '市況データ未取得時は、監視銘柄全体の分布をもとに暫定判定します。'}</small> : null}
+            {isAdmin ? <small>{marketEnv?.note || '市況データ未取得時は、登録銘柄全体の分布をもとに暫定判定します。'}</small> : null}
           </div>
           <div className="index-grid">
             {(marketEnv?.indices || []).length ? (marketEnv?.indices || []).map((item) => <IndexCard key={item.key || item.ticker} item={item} isAdmin={isAdmin} />) : (
@@ -505,29 +550,31 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
         </section>
 
         <section className="summary-strip">
-          <div><span>監視銘柄数</span><b>{rows.length}</b></div>
-          <div><span>{isAdmin ? '監視優先' : '注目候補'}</span><b>{byStatus('WATCH_PRIORITY').length}</b></div>
-          <div><span>イベント注意</span><b>{eventCautionCount}</b></div>
+          <div><span>登録銘柄数</span><b>{rows.length}</b></div>
+          <div><span>{isAdmin ? '確認優先' : '条件一致銘柄'}</span><b>{byStatus('WATCH_PRIORITY').length}</b></div>
+          <div><span>イベント確認</span><b>{eventCautionCount}</b></div>
           <div><span>イベント前確認</span><b>{eventBeforeCount}</b></div>
-          <div><span>{isAdmin ? 'スコア対象外' : '参考確認'}</span><b>{outRows.length}</b></div>
+          <div><span>{isAdmin ? '条件判定対象外' : '参考確認'}</span><b>{outRows.length}</b></div>
         </section>
 
-        <Section title={isAdmin ? '監視優先銘柄' : '注目候補'} subtitle="複数の確認材料が重なっている銘柄です。" rows={byStatus('WATCH_PRIORITY')} userId={userId} isAdmin={isAdmin} />
-        <Section title="通常確認" subtitle="主要な分類には入っていませんが、継続確認する銘柄です。" rows={byStatus('WATCH_LIST')} userId={userId} isAdmin={isAdmin} />
-        <Section title="イベント注意・確認" subtitle="決算などのイベント前後に注意して確認したい銘柄です。" rows={[...byStatus('EARNINGS_CAUTION'), ...byStatus('EARNINGS_EXCLUDE')]} userId={userId} isAdmin={isAdmin} />
-        <Section title={isAdmin ? 'スコア判定対象外' : '参考確認リスト'} subtitle="現時点では主要条件がそろっていないため、参考として確認する銘柄です。" rows={outRows} userId={userId} isAdmin={isAdmin} />
+        <Section title={isAdmin ? '確認優先銘柄' : '条件一致銘柄'} subtitle="あらかじめ定めた条件への一致が相対的に多い銘柄です。" rows={byStatus('WATCH_PRIORITY')} userId={userId} isAdmin={isAdmin} />
+        <Section title="通常確認" subtitle="登録銘柄のうち、通常確認として整理されている銘柄です。" rows={byStatus('WATCH_LIST')} userId={userId} isAdmin={isAdmin} />
+        <Section title="イベント確認" subtitle="決算日や開示情報などのイベント確認が必要な銘柄です。" rows={[...byStatus('EARNINGS_CAUTION'), ...byStatus('EARNINGS_EXCLUDE')]} userId={userId} isAdmin={isAdmin} />
+        <Section title={isAdmin ? '条件判定対象外' : '参考確認'} subtitle="条件判定対象外または参考確認として整理されている銘柄です。" rows={outRows} userId={userId} isAdmin={isAdmin} />
 
         <section className="section guide-section">
-          <h2>このアプリの見方</h2>
+          <h2>確認の流れ</h2>
           <ol>
-            <li>まず市場環境メーターを確認する。</li>
-            <li>注目候補とイベント注意・確認を確認する。</li>
-            <li>イベント前後の銘柄は慎重に確認する。</li>
-            <li>株探でチャートと直近安値を確認する。</li>
-            <li>最終判断は自身で行う。</li>
+            <li>条件一致が多い銘柄の指標を確認する。</li>
+            <li>イベント前後の銘柄は、決算日や開示情報を確認する。</li>
+            <li>気になる銘柄は、利用者自身の投資方針に照らして判断する。</li>
+            <li>本ツールの表示は売買判断を示すものではありません。</li>
           </ol>
-          <p className="disclaimer">本サービスは投資判断を補助する情報提供ツールです。特定銘柄の売買を推奨するものではありません。最終的な投資判断はご自身で行ってください。</p>
-          <div className="footer-links"><Link className="btn" href={`/u/${userId}/admin`}>CSV更新ページへ</Link></div>
+          <p className="disclaimer">本ツールは、株価・出来高等の公開情報をもとに、あらかじめ定めた条件への一致状況を機械的に整理するものです。特定銘柄の取得、売却、保有を推奨するものではありません。表示される条件整理点、ラベル、並び順は、将来の値上がり、利益獲得可能性、投資成果を示すものではありません。投資判断は利用者ご自身の責任で行ってください。</p>
+          <p className="disclaimer">表示される銘柄群は、PoC検証用のサンプル銘柄またはユーザー登録銘柄です。売買推奨銘柄ではありません。</p>
+          <p className="disclaimer">条件整理点は、あらかじめ定めた確認条件への一致状況を数値化したものであり、売買判断、将来の値上がり可能性、投資成果を示すものではありません。</p>
+          <p className="disclaimer">本ツールは外部データソースから取得した情報を利用しています。データの正確性、完全性、即時性、継続提供を保証するものではありません。</p>
+          <div className="footer-links"><Link className="btn" href={`/u/${userId}/admin`}>登録銘柄CSV更新ページへ</Link></div>
         </section>
       </main>
     </>

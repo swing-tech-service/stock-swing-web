@@ -62,7 +62,7 @@ export async function POST(req: Request) {
 
   const max = user.data.max_watchlist_count ?? 400;
   if (items.length > max) {
-    return NextResponse.json({ error: `watchlist limit exceeded: ${items.length}/${max}` }, { status: 400 });
+    return NextResponse.json({ error: `registered list limit exceeded: ${items.length}/${max}` }, { status: 400 });
   }
 
   // ユーザ単位で最新CSVに置き換える。過去分は物理削除せずinactive化して履歴の余地を残す。
@@ -78,6 +78,14 @@ export async function POST(req: Request) {
       .upsert(items, { onConflict: 'user_id,code' });
     if (upsert.error) return NextResponse.json({ error: upsert.error.message }, { status: 500 });
   }
+
+  await supabase.from('app_event_logs').insert({
+    user_id: userId,
+    event_type: 'registered_symbols_csv_upsert',
+    event_version: 'poc_concept_v1',
+    payload: { count: items.length },
+    created_at: new Date().toISOString(),
+  }).then(() => null);
 
   return NextResponse.json({ ok: true, count: items.length });
 }

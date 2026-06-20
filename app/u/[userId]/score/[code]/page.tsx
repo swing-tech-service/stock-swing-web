@@ -31,7 +31,7 @@ function fmt(value: any, suffix = '') {
 }
 
 function yn(v: any) {
-  return v ? '達成' : '未達';
+  return v ? '一致' : '非一致';
 }
 
 function formatJst(value: any) {
@@ -49,7 +49,6 @@ const ADMIN_USER_ID = 'takashimasaakiadmin';
 const HIDDEN_TAGS = new Set([
   'TRADE READY', 'TRADEREADY', 'ボラOK', 'ボラ不足', 'ボラ判定不可',
   '出来高OK', '出来高強い', '出来高不足', '出来高判定不可',
-  '損切り許容内', '損切り遠い', '直近安値接近',
 ]);
 
 function visibleTags(row: ResultRow) {
@@ -144,8 +143,8 @@ function ScoreCategoryHistoryTable({ metrics, isAdmin }: { metrics: Record<strin
   if (!rows.length) {
     return (
       <section className="section">
-        <h2>カテゴリ別スコア推移（管理者）</h2>
-        <p>10営業日分のカテゴリ別スコア履歴がありません。再分析後に表示されます。</p>
+        <h2>カテゴリ別条件整理点推移（管理者）</h2>
+        <p>10営業日分のカテゴリ別条件整理点履歴がありません。再分析後に表示されます。</p>
       </section>
     );
   }
@@ -161,14 +160,14 @@ function ScoreCategoryHistoryTable({ metrics, isAdmin }: { metrics: Record<strin
   };
   return (
     <section className="section">
-      <h2>カテゴリ別スコア推移（管理者・10営業日）</h2>
-      <p className="meta">MA / BB / MACD / RSI / 雲の5分類で、各日付時点の条件スコアを集計します。</p>
+      <h2>カテゴリ別条件整理点推移（管理者・10営業日）</h2>
+      <p className="meta">MA / BB / MACD / RSI / 雲の5分類で、各日付時点の条件整理点を集計します。</p>
       <table>
         <thead>
           <tr>
             <th>日付</th><th>区分</th><th>総合</th>
             {SCORE_GROUP_ORDER.map(([key, label]) => <th key={key}>{label}</th>)}
-            <th>達成条件</th>
+            <th>一致条件</th>
           </tr>
         </thead>
         <tbody>
@@ -188,37 +187,6 @@ function ScoreCategoryHistoryTable({ metrics, isAdmin }: { metrics: Record<strin
         </tbody>
       </table>
       <p className="meta">分類: MA=①②③④⑤⑥⑮㉔㉕ / BB=⑦⑧⑯⑰⑱㉓ / MACD=⑨⑩⑲⑳ / RSI=⑪⑫㉑㉒ / 雲=⑬⑭㉖</p>
-    </section>
-  );
-}
-
-function SidewaysTable({ title, prefix, metrics }: { title: string; prefix: 'daily' | 'weekly'; metrics: Record<string, any> | null | undefined }) {
-  const m = metrics || {};
-  const ok = !!m[`${prefix}_sideways_ok`];
-  const compareLabel = prefix === 'daily' ? '10営業日前BB2σ幅/終値' : '3週前BB2σ幅/終値';
-  const maLabel = prefix === 'daily' ? '日足5MA' : '週足13MA';
-  const closeLabel = prefix === 'daily' ? '日足終値' : '週足終値';
-  return (
-    <section className="section">
-      <h2>{title}</h2>
-      <table>
-        <tbody>
-          <tr><th>判定</th><td><span className={`badge ${ok ? 'green' : 'gray'}`}>{fmt(m[`${prefix}_sideways_tag`])}</span></td></tr>
-          <tr><th>未達理由</th><td>{fmt(m[`${prefix}_sideways_reason`])}</td></tr>
-          <tr><th>横ばいレンジ最大値</th><td>{fmt(m[`${prefix}_sideways_range_max`] ?? m[`${prefix}_sideways_range_high`])} / 基準日 {fmt(m[`${prefix}_sideways_range_max_date`] ?? m[`${prefix}_sideways_range_high_date`])}<br />{fmt(m[`${prefix}_sideways_range_high_reason`])}</td></tr>
-          <tr><th>横ばいレンジ最小値</th><td>{fmt(m[`${prefix}_sideways_range_min`] ?? m[`${prefix}_sideways_range_low`])} / 基準日 {fmt(m[`${prefix}_sideways_range_min_date`] ?? m[`${prefix}_sideways_range_low_date`])}<br />{fmt(m[`${prefix}_sideways_range_low_reason`])}</td></tr>
-          <tr><th>現在値のレンジ内判定</th><td>{m[`${prefix}_sideways_range_in`] ? 'レンジ内' : 'レンジ外'} / 終値 {fmt(m[`${prefix}_sideways_close`])}</td></tr>
-          <tr><th>横ばいレンジタグ</th><td>{[m[`${prefix}_sideways_bb_range_tag`], m[`${prefix}_sideways_rsi_range_tag`], m[`${prefix}_sideways_ma_range_tag`]].filter(Boolean).join(' / ') || '-'}</td></tr>
-          <tr><th>BB±2σ</th><td>+2σ {fmt(m[`${prefix}_sideways_bb_upper2`])} / -2σ {fmt(m[`${prefix}_sideways_bb_lower2`])}</td></tr>
-          <tr><th>BBブレイク</th><td>現在BB2σ幅/終値 {fmt(m[`${prefix}_sideways_bb_width`], '%')} / {compareLabel} {fmt(m[`${prefix}_sideways_bb_width_compare`], '%')}<br />{fmt(m[`${prefix}_sideways_bb_breakout_reason`])}</td></tr>
-          <tr><th>RSI</th><td>RSI {fmt(m[`${prefix}_sideways_rsi`])} / RSI傾き {fmt(m[`${prefix}_sideways_rsi_slope`])}</td></tr>
-          <tr><th>{maLabel}</th><td>MA {fmt(m[`${prefix}_sideways_ma`])} / MA傾き {fmt(m[`${prefix}_sideways_ma_slope`])}</td></tr>
-          <tr><th>{closeLabel}</th><td>{fmt(m[`${prefix}_sideways_close`])} / 株価がMA以下: {m[`${prefix}_sideways_price_below_ma`] ? 'Yes' : 'No'}</td></tr>
-          <tr><th>出来高基準</th><td>{fmt(m[`${prefix}_sideways_volume_reference_label`])}平均 {fmt(m[`${prefix}_sideways_volume_avg_reference`] ?? m[`${prefix}_sideways_volume_avg_all`])} / ±3本平均出来高が基準の3倍以上</td></tr>
-          <tr><th>最大値側 出来高</th><td>±3本平均 {fmt(m[`${prefix}_sideways_range_high_window_volume_avg`])} / 基準平均 {fmt(m[`${prefix}_sideways_range_high_reference_volume_avg`])} / 倍率 {fmt(m[`${prefix}_sideways_range_high_volume_ratio`])}</td></tr>
-          <tr><th>最小値側 出来高</th><td>±3本平均 {fmt(m[`${prefix}_sideways_range_low_window_volume_avg`])} / 基準平均 {fmt(m[`${prefix}_sideways_range_low_reference_volume_avg`])} / 倍率 {fmt(m[`${prefix}_sideways_range_low_volume_ratio`])}</td></tr>
-        </tbody>
-      </table>
     </section>
   );
 }
@@ -243,29 +211,30 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
   return (
     <>
       <header className="hero">
-        <div className="eyebrow">Score Detail</div>
+        <div className="eyebrow">Condition Detail</div>
         <h1>{code} {row?.name || ''}</h1>
         <p className="meta">{userId} / 最終更新: {formatJst(run?.finished_at || run?.started_at)}</p>
       </header>
       <main className="wrap">
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
-          <Link className="btn" href={`/u/${userId}`}>ダッシュボードへ戻る</Link>
+          <Link className="btn" href={`/u/${userId}`}>銘柄整理画面へ戻る</Link>
           {row?.kabutan_url ? <a className="btn" href={row.kabutan_url} target="_blank" rel="noreferrer">株探</a> : null}
         </div>
         {errorMessage ? <div className="alert">エラー: {errorMessage}</div> : null}
         {row ? (
           <>
             <div className="cards">
-              <div className="card">スコア<br /><b>{fmt(row.score)}</b></div>
-              <div className="card">達成<br /><b>{fmt(row.condition_count)}</b></div>
-              <div className="card">高配点未達<br /><b>{fmt(row.failed_star_numbers)}</b></div>
-              <div className="card">現在値<br /><b>{fmt(row.close)}</b></div>
+              <div className="card">条件整理点<br /><b>{fmt(row.score)}</b></div>
+              <div className="card">一致<br /><b>{fmt(row.condition_count)}</b></div>
+              <div className="card">高配点非一致<br /><b>{fmt(row.failed_star_numbers)}</b></div>
+              <div className="card">株価<br /><b>{fmt(row.close)}</b></div>
             </div>
+            <p className="disclaimer">条件整理点は、あらかじめ定めた確認条件への一致状況を数値化したものであり、売買判断、将来の値上がり可能性、投資成果を示すものではありません。</p>
             <ScoreCategoryHistoryTable metrics={row.metrics} isAdmin={isAdmin} />
             <section className="section">
-              <h2>スコア条件の達成状況</h2>
+              <h2>条件一致状況</h2>
               <table>
-                <thead><tr><th>No</th><th>結果</th><th>条件</th><th>判定基準</th><th>現在値・指標</th><th>未達の場合の見方</th></tr></thead>
+                <thead><tr><th>No</th><th>結果</th><th>条件名</th><th>条件</th><th>株価・指標</th><th>非一致理由</th></tr></thead>
                 <tbody>
                   {conditions.map((c) => (
                     <tr key={c.no}>
@@ -280,8 +249,6 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
                 </tbody>
               </table>
             </section>
-            <SidewaysTable title="日足横ばい以上" prefix="daily" metrics={row.metrics} />
-            <SidewaysTable title="週足横ばい以上" prefix="weekly" metrics={row.metrics} />
             <section className="section">
               <h2>補助テクニカル・タグ理由</h2>
               <table>
@@ -291,8 +258,6 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
                   <tr><th>BB理由</th><td>{fmt(row.tag_reasons?.bb || row.metrics?.reason)}</td></tr>
                   <tr><th>6か月値幅</th><td>{fmt(row.metrics?.six_month_range_pct, '%')} / 高値 {fmt(row.metrics?.six_month_high)} / 安値 {fmt(row.metrics?.six_month_low)}</td></tr>
                   <tr><th>売買代金</th><td>20日平均 {fmt(row.metrics?.avg_trading_value_20d)}</td></tr>
-                  <tr><th>損切り参考</th><td>{fmt(row.metrics?.stop_loss_reference)} / 距離 {fmt(row.metrics?.stop_loss_distance_pct, '%')} / 直近安値日 {fmt(row.metrics?.recent_low_date)}</td></tr>
-                  <tr><th>利確20%</th><td>{fmt(row.metrics?.take_profit_20pct)}</td></tr>
                 </tbody>
               </table>
             </section>

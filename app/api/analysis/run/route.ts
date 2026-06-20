@@ -72,9 +72,11 @@ export async function POST(req: Request) {
     }, { status: 500 });
   }
 
+  await supabase.from('app_event_logs').insert({ user_id: userId, event_type: 'condition_analysis_requested', event_version: 'poc_concept_v1', payload: { owner, repo, workflow, ref }, created_at: new Date().toISOString() }).then(() => null);
+
   return NextResponse.json({
     ok: true,
-    message: `${userId} のスコア判定更新を開始しました。GitHub Actions完了後にダッシュボードへ反映されます。`,
+    message: `${userId} の条件判定更新を開始しました。GitHub Actions完了後に銘柄整理画面へ反映されます。`,
     actionsUrl: `https://github.com/${owner}/${repo}/actions`,
     request: { owner, repo, workflow, ref, userId },
   });

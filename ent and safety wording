@@ -1,0 +1,15 @@
+warning: in the working copy of 'app/api/analysis/run/route.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/api/results/[userId]/route.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/api/watchlist/upload/route.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/globals.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/u/[userId]/admin/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/u/[userId]/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/u/[userId]/score/[code]/page.tsx', LF will be replaced by CRLF the next time Git touches it
+ app/api/analysis/run/route.ts        |   4 [32m+[m[31m-[m
+ app/api/results/[userId]/route.ts    |  17 [32m++++[m[31m-[m
+ app/api/watchlist/upload/route.ts    |  10 [32m++[m[31m-[m
+ app/globals.css                      |   4 [32m++[m
+ app/u/[userId]/admin/page.tsx        | 129 [32m++++++++++++++[m[31m-------------------[m
+ app/u/[userId]/page.tsx              | 135 [32m+++++++++++++++++++++++[m[31m------------[m
+ app/u/[userId]/score/[code]/page.tsx |  65 [32m++++[m[31m-------------[m
+ 7 files changed, 193 insertions(+), 171 deletions(-)
