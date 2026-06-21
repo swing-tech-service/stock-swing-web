@@ -5,7 +5,7 @@ type ResultRow = {
   id: string;
   code: string;
   name: string | null;
-  score: number | null;
+  条件整理点: number | null;
   condition_count: number | null;
   failed_star_numbers: string | null;
   tags: string[] | null;
@@ -207,7 +207,7 @@ function AdminCategoryScoreHistory({ row, isAdmin }: { row: ResultRow; isAdmin: 
   const history = categoryHistory(row);
   if (!history.length) return null;
   return (
-    <div className="admin-cat-history" aria-label="カテゴリ別条件整理点推移">
+    <div className="admin-cat-history" aria-label="カテゴリ別スコア推移">
       <div className="admin-cat-history-title">10日カテゴリスコア</div>
       <div className="admin-cat-history-scroll">
         <table>
@@ -247,6 +247,68 @@ function yenText(value: any) {
   if (!Number.isFinite(n)) return String(value);
   return `${new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 2 }).format(n)}円`;
 }
+
+function adminTradeSimulations(row: ResultRow) {
+  const h = row.metrics?.admin_trade_simulations_50d || row.metrics?.admin_trade_simulations_40d;
+  return Array.isArray(h) ? h : [];
+}
+
+function simPrice(value: any) {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: n >= 1000 ? 0 : 1 }).format(n);
+}
+
+function simProfit(value: any) {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${new Intl.NumberFormat('ja-JP', { maximumFractionDigits: n >= 1000 ? 0 : 1 }).format(n)}`;
+}
+
+function AdminTradeSimulation50d({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
+  if (!isAdmin) return null;
+  const strategies = adminTradeSimulations(row)
+    .map((s: any) => ({ ...s, trades: Array.isArray(s?.trades) ? s.trades : [] }))
+    .filter((s: any) => s.trades.length > 0);
+  if (!strategies.length) return null;
+
+  const tradeRows = strategies.flatMap((s: any) => s.trades.map((t: any, i: number) => ({ strategy: s.label || s.id || '-', rule: s.rule || '', trade: t, key: `${s.id || s.label}-${i}-${t.buy_date || ''}-${t.sell_date || ''}` })));
+  return (
+    <div className="admin-sim50" aria-label="50営業日機械的過去検証">
+      <div className="admin-sim50-title">50営業日 機械的過去検証</div>
+      <div className="admin-sim50-note">管理者検証用です。仮想購入・仮想売却は条件変化を翌営業日始値に機械適用した過去整理であり、売買判断を示すものではありません。</div>
+      <div className="admin-sim50-scroll">
+        <table>
+          <thead>
+            <tr><th>条件</th><th>仮想購入日</th><th>仮想購入株価</th><th>仮想売却日</th><th>仮想売却株価</th><th>差額</th><th>状態</th></tr>
+          </thead>
+          <tbody>
+            {tradeRows.map((r: any) => {
+              const t = r.trade || {};
+              const p = Number(t.profit);
+              const cls = Number.isFinite(p) ? (p >= 0 ? 'plus' : 'minus') : '';
+              return (
+                <tr key={r.key} title={r.rule}>
+                  <td>{r.strategy}</td>
+                  <td>{shortDate(t.buy_date) || '-'}</td>
+                  <td>{simPrice(t.buy_price)}</td>
+                  <td>{shortDate(t.sell_date) || '-'}</td>
+                  <td>{simPrice(t.sell_price)}</td>
+                  <td className={cls}>{simProfit(t.profit)}</td>
+                  <td>{t.status === 'open' ? '未決済' : '完了'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 
 function DividendLine({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
   const m = row.metrics || {};
@@ -404,10 +466,10 @@ function fallbackMarketTone(rows: ResultRow[], isAdmin: boolean) {
   const risk = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('イベント確認') || t.includes('決算'))).length;
   const ratio = scored.length ? high / scored.length : 0;
   const score = ratio * 2 - Math.min(risk, 5) * 0.15;
-  if (score >= 1.6) return { label: '条件一致やや多め', stars: '★★★★☆', comment: '確認候補が多く、比較的整理しやすい状況です。' };
+  if (score >= 1.6) return { label: 'やや強気', stars: '★★★★☆', comment: '確認候補が多く、比較的整理しやすい状況です。' };
   if (score >= 0.9) return { label: '中立', stars: '★★★☆☆', comment: '候補はあります。イベントと株価位置を確認しながら選別します。' };
-  if (score >= 0.4) return { label: '確認やや控えめ', stars: '★★☆☆☆', comment: '確認候補を絞り、イベント前の銘柄に注意します。' };
-  return { label: '確認控えめ', stars: '★☆☆☆☆', comment: '無理に対象を広げず、確認候補を絞ります。' };
+  if (score >= 0.4) return { label: 'やや慎重', stars: '★★☆☆☆', comment: '確認候補を絞り、イベント前の銘柄に注意します。' };
+  return { label: '慎重', stars: '★☆☆☆☆', comment: '無理に対象を広げず、確認候補を絞ります。' };
 }
 
 function IndexCard({ item, isAdmin }: { item: MarketIndex; isAdmin: boolean }) {
@@ -465,6 +527,7 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
       </div>
       <ScoreHistory row={row} />
       <AdminCategoryScoreHistory row={row} isAdmin={isAdmin} />
+      <AdminTradeSimulation50d row={row} isAdmin={isAdmin} />
       <DividendLine row={row} isAdmin={isAdmin} />
       <div className="stock-tags">
         {shownTags.map((t) => <span className={`badge ${tagClass(t)}`} key={t}>{t}</span>)}
@@ -524,7 +587,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
   return (
     <>
       <header className="hero premium-hero">
-        <div className="eyebrow">PoC Technical Organizer {isAdmin ? ' / Admin' : ''}</div>
+        <div className="eyebrow">Premium Swing Screening {isAdmin ? ' / Admin' : ''}</div>
         <h1>銘柄整理ダッシュボード</h1>
         <p className="hero-lead">登録銘柄について、テクニカル条件とイベント情報を機械的に整理します。</p>
         <p className="meta">ユーザ: {userId} / 最終更新: {lastUpdated} / 毎日16:30 JST頃から更新開始</p>
@@ -559,7 +622,7 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
 
         <Section title={isAdmin ? '確認優先銘柄' : '条件一致銘柄'} subtitle="あらかじめ定めた条件への一致が相対的に多い銘柄です。" rows={byStatus('WATCH_PRIORITY')} userId={userId} isAdmin={isAdmin} />
         <Section title="通常確認" subtitle="登録銘柄のうち、通常確認として整理されている銘柄です。" rows={byStatus('WATCH_LIST')} userId={userId} isAdmin={isAdmin} />
-        <Section title="イベント確認" subtitle="決算日や開示情報などのイベント確認が必要な銘柄です。" rows={[...byStatus('EARNINGS_CAUTION'), ...byStatus('EARNINGS_EXCLUDE')]} userId={userId} isAdmin={isAdmin} />
+        <Section title="イベント確認・確認" subtitle="決算日や開示情報などのイベント確認が必要な銘柄です。" rows={[...byStatus('EARNINGS_CAUTION'), ...byStatus('EARNINGS_EXCLUDE')]} userId={userId} isAdmin={isAdmin} />
         <Section title={isAdmin ? '条件判定対象外' : '参考確認'} subtitle="条件判定対象外または参考確認として整理されている銘柄です。" rows={outRows} userId={userId} isAdmin={isAdmin} />
 
         <section className="section guide-section">
