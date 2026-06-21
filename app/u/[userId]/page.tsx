@@ -279,7 +279,7 @@ function AdminTradeSimulation50d({ row, isAdmin }: { row: ResultRow; isAdmin: bo
   return (
     <div className="admin-sim50" aria-label="50営業日機械的過去検証">
       <div className="admin-sim50-title">50営業日 機械的過去検証</div>
-      <div className="admin-sim50-note">管理者検証用です。ここでいう24点・5点は「一致項目数」ではなくスコアです。仮想購入・仮想売却はスコア変化を翌営業日始値に機械適用した過去整理であり、売買判断を示すものではありません。</div>
+      <div className="admin-sim50-note">管理者検証用です。ここでいう24点・5点は「一致項目数」ではなくスコアです。この機械的過去検証では、出来高・ボラ・週足雲による通常の条件判定対象外ゲートを使わず、直近50営業日のスコアを計算した前提で判定します。仮想購入・仮想売却はスコア変化を翌営業日始値に機械適用した過去整理であり、売買判断を示すものではありません。</div>
       <div className="admin-sim50-scroll">
         <table>
           <thead>
