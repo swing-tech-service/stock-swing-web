@@ -268,43 +268,78 @@ function simProfit(value: any) {
   return `${sign}${new Intl.NumberFormat('ja-JP', { maximumFractionDigits: n >= 1000 ? 0 : 1 }).format(n)}`;
 }
 
+function signedScore(value: any) {
+  if (value === null || value === undefined || value === '') return '-';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return `${n > 0 ? '+' : ''}${Math.round(n)}`;
+}
+
 function AdminTradeSimulation50d({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
   if (!isAdmin) return null;
   const strategies = adminTradeSimulations(row)
-    .map((s: any) => ({ ...s, trades: Array.isArray(s?.trades) ? s.trades : [] }))
-    .filter((s: any) => s.trades.length > 0);
+    .map((s: any) => ({ ...s, trades: Array.isArray(s?.trades) ? s.trades : [] }));
   if (!strategies.length) return null;
 
+  const first = strategies[0] || {};
+  const scoreMin = first.score_min;
+  const scoreMax = first.score_max;
   const tradeRows = strategies.flatMap((s: any) => s.trades.map((t: any, i: number) => ({ strategy: s.label || s.id || '-', rule: s.rule || '', trade: t, key: `${s.id || s.label}-${i}-${t.buy_date || ''}-${t.sell_date || ''}` })));
   return (
     <div className="admin-sim50" aria-label="50営業日機械的過去検証">
       <div className="admin-sim50-title">50営業日 機械的過去検証</div>
       <div className="admin-sim50-note">管理者検証用です。ここでいう24点・5点は「一致項目数」ではなくスコアです。この機械的過去検証では、出来高・ボラ・週足雲による通常の条件判定対象外ゲートを使わず、直近50営業日のスコアを計算した前提で判定します。仮想購入・仮想売却はスコア変化を翌営業日始値に機械適用した過去整理であり、売買判断を示すものではありません。</div>
-      <div className="admin-sim50-scroll">
-        <table>
-          <thead>
-            <tr><th>条件</th><th>仮想購入日</th><th>仮想購入株価</th><th>仮想売却日</th><th>仮想売却株価</th><th>差額</th><th>状態</th></tr>
-          </thead>
-          <tbody>
-            {tradeRows.map((r: any) => {
-              const t = r.trade || {};
-              const p = Number(t.profit);
-              const cls = Number.isFinite(p) ? (p >= 0 ? 'plus' : 'minus') : '';
-              return (
-                <tr key={r.key} title={r.rule}>
-                  <td>{r.strategy}</td>
-                  <td>{shortDate(t.buy_date) || '-'}</td>
-                  <td>{simPrice(t.buy_price)}</td>
-                  <td>{shortDate(t.sell_date) || '-'}</td>
-                  <td>{simPrice(t.sell_price)}</td>
-                  <td className={cls}>{simProfit(t.profit)}</td>
-                  <td>{t.status === 'open' ? '未決済' : '完了'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+
+      <div className="admin-sim50-diagnostics">
+        <div className="admin-sim50-diag-main">
+          <span>スコア計算日数: <b>{first.score_calculated_days ?? '-'}</b> / <b>{first.score_required_days ?? 50}</b></span>
+          <span>最新50日スコア範囲: <b>{scoreMin ?? '-'}</b>〜<b>{scoreMax ?? '-'}</b></span>
+          <span>最大前日比上昇: <b>{signedScore(first.max_score_diff_up)}</b></span>
+          <span>最大前日比下降: <b>{signedScore(first.max_score_diff_down)}</b></span>
+        </div>
+        <div className="admin-sim50-diag-grid">
+          {strategies.map((s: any, idx: number) => (
+            <div key={s.id || idx} className="admin-sim50-diag-card">
+              <b>{String(idx + 1)}条件</b>
+              <span>買いシグナル数: {s.buy_signal_count ?? 0}</span>
+              <span>売りシグナル数: {s.sell_signal_count ?? 0}</span>
+            </div>
+          ))}
+        </div>
+        {first.score_complete === false ? (
+          <div className="admin-sim50-warning">スコア未計算日があります: {(Array.isArray(first.score_missing_dates) ? first.score_missing_dates : []).join(', ') || '詳細なし'}</div>
+        ) : null}
       </div>
+
+      {tradeRows.length ? (
+        <div className="admin-sim50-scroll">
+          <table>
+            <thead>
+              <tr><th>条件</th><th>仮想購入日</th><th>仮想購入株価</th><th>仮想売却日</th><th>仮想売却株価</th><th>差額</th><th>状態</th></tr>
+            </thead>
+            <tbody>
+              {tradeRows.map((r: any) => {
+                const t = r.trade || {};
+                const p = Number(t.profit);
+                const cls = Number.isFinite(p) ? (p >= 0 ? 'plus' : 'minus') : '';
+                return (
+                  <tr key={r.key} title={r.rule}>
+                    <td>{r.strategy}</td>
+                    <td>{shortDate(t.buy_date) || '-'}</td>
+                    <td>{simPrice(t.buy_price)}</td>
+                    <td>{shortDate(t.sell_date) || '-'}</td>
+                    <td>{simPrice(t.sell_price)}</td>
+                    <td className={cls}>{simProfit(t.profit)}</td>
+                    <td>{t.status === 'open' ? '未決済' : '完了'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="admin-sim50-empty">直近50営業日では、①②③の条件に基づく仮想売買結果はありません。</div>
+      )}
     </div>
   );
 }
