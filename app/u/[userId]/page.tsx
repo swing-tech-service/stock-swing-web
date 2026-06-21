@@ -1,10 +1,11 @@
-import { supabaseAdmin } from '../../../lib/supabaseServer';
+﻿import { supabaseAdmin } from '../../../lib/supabaseServer';
 import Link from 'next/link';
 
 type ResultRow = {
   id: string;
   code: string;
   name: string | null;
+  score: number | null;
   条件整理点: number | null;
   condition_count: number | null;
   failed_star_numbers: string | null;
