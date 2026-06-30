@@ -17,6 +17,7 @@ export async function POST(req: Request) {
   const userId = String(body.userId || '').trim();
   const version = String(body.version || DEFAULT_VERSION).trim();
   const agreed = body.agreed === 'yes' || body.agreed === true || body.agreed === 'true';
+  const returnPath = String(body.returnPath || `/u/${encodeURIComponent(userId)}`).trim();
 
   if (!userId || !agreed) return NextResponse.json({ error: 'consent is required' }, { status: 400 });
 
@@ -35,5 +36,6 @@ export async function POST(req: Request) {
   });
   if (insert.error) return NextResponse.json({ error: insert.error.message }, { status: 500 });
 
-  return NextResponse.redirect(new URL(`/u/${encodeURIComponent(userId)}`, req.url), { status: 303 });
+  const redirectUrl = returnPath.startsWith('/') && !returnPath.startsWith('//') ? new URL(returnPath, req.url) : new URL(`/u/${encodeURIComponent(userId)}`, req.url);
+  return NextResponse.redirect(redirectUrl, { status: 303 });
 }

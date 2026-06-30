@@ -194,6 +194,20 @@ function ScoreCategoryHistoryTable({ metrics, isAdmin }: { metrics: Record<strin
 export default async function ScoreDetail({ params }: { params: Promise<{ userId: string; code: string }> }) {
   const { userId, code } = await params;
   const isAdmin = userId === ADMIN_USER_ID;
+
+  if (!isAdmin) {
+    return (
+      <>
+        <header className="hero"><div className="eyebrow">PoC / Beta</div><h1>条件詳細</h1></header>
+        <main className="wrap">
+          <section className="section">
+            <p>現在、この検証用ページは利用できません。</p>
+          </section>
+        </main>
+      </>
+    );
+  }
+
   let run: any = null;
   let row: ResultRow | null = null;
   let errorMessage = '';

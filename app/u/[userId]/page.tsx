@@ -1,4 +1,5 @@
-﻿import { supabaseAdmin } from '../../../lib/supabaseServer';
+import { supabaseAdmin } from '../../../lib/supabaseServer';
+import { validatePocAccess } from '../../../lib/pocAccess';
 import Link from 'next/link';
 
 type ResultRow = {
@@ -77,7 +78,7 @@ async function hasPocConsent(userId: string) {
   return (consent.data || []).length > 0;
 }
 
-function PocConsentNotice({ userId }: { userId: string }) {
+function PocConsentNotice({ userId, returnPath }: { userId: string; returnPath: string }) {
   return (
     <main className="wrap premium-wrap">
       <section className="section consent-box">
@@ -90,6 +91,7 @@ function PocConsentNotice({ userId }: { userId: string }) {
         <form action="/api/consents/poc" method="POST" className="consent-form">
           <input type="hidden" name="userId" value={userId} />
           <input type="hidden" name="version" value={POC_CONSENT_VERSION} />
+          <input type="hidden" name="returnPath" value={returnPath} />
           <label className="consent-check"><input type="checkbox" name="agreed" value="yes" required /> 上記内容を確認し、PoC検証用ツールとして利用することに同意します。</label>
           <button className="btn" type="submit">同意して利用する</button>
         </form>
@@ -587,15 +589,40 @@ function Section({ title, subtitle, rows, userId, isAdmin }: { title: string; su
   );
 }
 
-export default async function Dashboard({ params }: { params: Promise<{ userId: string }> }) {
+export default async function Dashboard({ params, searchParams }: { params: Promise<{ userId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { userId } = await params;
+  const query = searchParams ? await searchParams : {};
   const isAdmin = userId === ADMIN_USER_ID;
+
+  const returnQuery = new URLSearchParams();
+  const queryUser = Array.isArray(query.user) ? query.user[0] : query.user;
+  const queryKey = Array.isArray(query.key) ? query.key[0] : query.key;
+  if (queryUser) returnQuery.set('user', queryUser);
+  if (queryKey) returnQuery.set('key', queryKey);
+  const returnPath = `/u/${encodeURIComponent(userId)}${returnQuery.toString() ? `?${returnQuery.toString()}` : ''}`;
+
+  if (!isAdmin) {
+    const access = await validatePocAccess({ pathUserId: userId, queryUser: query.user, queryKey: query.key, path: `/u/${userId}` });
+    if (!access.allowed) {
+      return (
+        <>
+          <header className="hero premium-hero"><div className="eyebrow">PoC / Beta</div><h1>銘柄整理ダッシュボード</h1></header>
+          <main className="wrap premium-wrap">
+            <section className="section">
+              <p>現在、この検証用ページは利用できません。</p>
+            </section>
+          </main>
+        </>
+      );
+    }
+  }
+
   const consentOk = await hasPocConsent(userId);
   if (!consentOk) {
     return (
       <>
         <header className="hero premium-hero"><div className="eyebrow">PoC / Beta</div><h1>銘柄整理ダッシュボード</h1><p className="hero-lead">PoC検証用ツールとしての利用同意が必要です。</p></header>
-        <PocConsentNotice userId={userId} />
+        <PocConsentNotice userId={userId} returnPath={returnPath} />
       </>
     );
   }
@@ -629,6 +656,11 @@ export default async function Dashboard({ params }: { params: Promise<{ userId: 
         <p className="meta">ユーザ: {userId} / 最終更新: {lastUpdated} / 毎日16:30 JST頃から更新開始</p>
       </header>
       <main className="wrap premium-wrap">
+        <section className="section poc-access-notice">
+          <p>本ツールは、登録銘柄や市場データをもとに確認対象を整理するための検証用ツールです。</p>
+          <p>特定の銘柄の売買を推奨するものではありません。</p>
+          <p>最終的な投資判断はご自身で行ってください。</p>
+        </section>
         {errorMessage ? <div className="alert">エラー: {errorMessage}</div> : null}
 
         <section className="market-panel market-panel-v2">
