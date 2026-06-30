@@ -66,16 +66,12 @@ export async function validatePocAccess(input: ValidatePocAccessInput): Promise<
       return { allowed, result, userCode };
     }
 
-    if (queryUser !== input.pathUserId) {
-      result = 'invalid_user';
-      return { allowed, result, userCode };
-    }
-
     const supabase = supabaseAdmin();
     const user = await supabase
       .from('poc_users')
-      .select('user_code,access_key_hash,is_active')
+      .select('user_code,target_user_code,access_key_hash,is_active')
       .eq('user_code', queryUser)
+      .eq('target_user_code', input.pathUserId)
       .maybeSingle();
 
     if (user.error) {
@@ -102,7 +98,8 @@ export async function validatePocAccess(input: ValidatePocAccessInput): Promise<
     const update = await supabase
       .from('poc_users')
       .update({ last_accessed_at: new Date().toISOString() })
-      .eq('user_code', queryUser);
+      .eq('user_code', queryUser)
+      .eq('target_user_code', input.pathUserId);
 
     if (update.error) {
       result = 'error';
