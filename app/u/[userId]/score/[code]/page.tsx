@@ -139,7 +139,9 @@ const SCORE_GROUP_ORDER = [
 
 function ScoreCategoryHistoryTable({ metrics, isAdmin }: { metrics: Record<string, any> | null | undefined; isAdmin: boolean }) {
   if (!isAdmin) return null;
-  const rows = Array.isArray(metrics?.score_category_history_10d) ? metrics?.score_category_history_10d : [];
+  const rows = Array.isArray(metrics?.admin_score_category_history_10d)
+    ? metrics?.admin_score_category_history_10d
+    : (Array.isArray(metrics?.score_category_history_10d) ? metrics?.score_category_history_10d : []);
   if (!rows.length) {
     return (
       <section className="section">
@@ -220,7 +222,13 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
     errorMessage = error instanceof Error ? error.message : String(error);
   }
 
-  const conditions = buildConditions(row?.metrics || null);
+  const displayMetrics = row?.metrics
+    ? { ...row.metrics, conditions: row.metrics.admin_conditions || row.metrics.conditions || {} }
+    : null;
+  const adminScore = typeof row?.metrics?.admin_score === 'number' ? row.metrics.admin_score : row?.score;
+  const adminConditionCount = typeof row?.metrics?.admin_condition_count === 'number' ? row.metrics.admin_condition_count : row?.condition_count;
+  const adminFailedStars = row?.metrics?.admin_failed_star_numbers ?? row?.failed_star_numbers;
+  const conditions = buildConditions(displayMetrics);
 
   return (
     <>
@@ -238,13 +246,18 @@ export default async function ScoreDetail({ params }: { params: Promise<{ userId
         {row ? (
           <>
             <div className="cards">
-              <div className="card">条件整理点<br /><b>{fmt(row.score)}</b></div>
-              <div className="card">一致<br /><b>{fmt(row.condition_count)}</b></div>
-              <div className="card">高配点非一致<br /><b>{fmt(row.failed_star_numbers)}</b></div>
+              <div className="card">条件整理点<br /><b>{fmt(adminScore)}</b></div>
+              <div className="card">一致<br /><b>{fmt(adminConditionCount)}</b></div>
+              <div className="card">高配点非一致<br /><b>{fmt(adminFailedStars)}</b></div>
               <div className="card">株価<br /><b>{fmt(row.close)}</b></div>
             </div>
             <p className="disclaimer">条件整理点は、あらかじめ定めた確認条件への一致状況を数値化したものであり、売買判断、将来の値上がり可能性、投資成果を示すものではありません。</p>
-            <ScoreCategoryHistoryTable metrics={row.metrics} isAdmin={isAdmin} />
+            <section className="section">
+              <h2>管理者スコア算定方式</h2>
+              <p>管理者画面では、出来高・6か月ボラ・週足一目均衡表による通常のスコア判定対象ゲートを使用せず、登録銘柄すべてについて26条件の条件整理点を算定します。</p>
+              {row.metrics?.score_eligible === false ? <p className="meta">通常ゲートでは対象外: {fmt(row.metrics?.score_exclusion_reason)}</p> : <p className="meta">通常ゲートでも判定対象です。</p>}
+            </section>
+            <ScoreCategoryHistoryTable metrics={displayMetrics} isAdmin={isAdmin} />
             <section className="section">
               <h2>条件一致状況</h2>
               <table>
