@@ -160,8 +160,8 @@ function shortDate(value: any) {
   return '';
 }
 
-function scoreHistory(row: ResultRow, isAdmin: boolean) {
-  const h = isAdmin ? row.metrics?.admin_score_history_5d : row.metrics?.score_history_5d;
+function scoreHistory(row: ResultRow) {
+  const h = row.metrics?.score_history_5d;
   return Array.isArray(h) ? h : [];
 }
 
@@ -175,8 +175,8 @@ function scoreTrendMark(history: any[]) {
   return '→';
 }
 
-function ScoreHistory({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
-  const history = scoreHistory(row, isAdmin);
+function ScoreHistory({ row }: { row: ResultRow }) {
+  const history = scoreHistory(row);
   if (!history.length) return null;
   const mark = scoreTrendMark(history);
   return (
@@ -195,8 +195,8 @@ function ScoreHistory({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
 }
 
 
-function categoryHistory(row: ResultRow, isAdmin: boolean) {
-  const h = isAdmin ? row.metrics?.admin_score_category_history_10d : row.metrics?.score_category_history_10d;
+function categoryHistory(row: ResultRow) {
+  const h = row.metrics?.score_category_history_10d;
   return Array.isArray(h) ? h : [];
 }
 
@@ -207,7 +207,7 @@ function groupScore(h: any, key: string) {
 
 function AdminCategoryScoreHistory({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
   if (!isAdmin) return null;
-  const history = categoryHistory(row, isAdmin);
+  const history = categoryHistory(row);
   if (!history.length) return null;
   return (
     <div className="admin-cat-history" aria-label="カテゴリ別スコア推移">
@@ -468,13 +468,8 @@ function visibleTags(row: ResultRow, isAdmin: boolean) {
   return Array.from(new Set(tags.map((t) => displayTag(t, isAdmin)).filter(Boolean)));
 }
 
-function scoreValue(row: ResultRow, isAdmin: boolean) {
-  const value = isAdmin ? row.metrics?.admin_score : row.score;
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function isScored(row: ResultRow, isAdmin: boolean) {
-  return scoreValue(row, isAdmin) !== null;
+function isScored(row: ResultRow) {
+  return typeof row.score === 'number' && Number.isFinite(row.score);
 }
 
 function hasAnyTag(row: ResultRow, words: string[], isAdmin: boolean) {
@@ -483,12 +478,11 @@ function hasAnyTag(row: ResultRow, words: string[], isAdmin: boolean) {
 
 function statusOf(row: ResultRow, isAdmin: boolean): StatusKey {
   const tags = visibleTags(row, isAdmin);
-  const score = scoreValue(row, isAdmin);
-  // 一般画面は従来どおりゲート対象外を参考確認へ。管理者はadmin_scoreを使用する。
-  if (score === null) return 'OUT_OF_SCOPE';
+  // ボラ・出来高未達は参考確認へ。ただしイベントタグは同じ行に表示する。
+  if (!isScored(row)) return 'OUT_OF_SCOPE';
   if (tags.some((t) => t.includes('イベント前確認') || t.includes('決算前除外'))) return 'EARNINGS_EXCLUDE';
   if (tags.some((t) => t.includes('イベント確認') || t.includes('決算直前注意'))) return 'EARNINGS_CAUTION';
-  if (score >= 22) return 'WATCH_PRIORITY';
+  if (Number(row.score) >= 22) return 'WATCH_PRIORITY';
   return 'WATCH_LIST';
 }
 
@@ -496,22 +490,17 @@ function reasonsOf(row: ResultRow, isAdmin: boolean) {
   if (!isAdmin) return [];
   const tags = visibleTags(row, true);
   const reasons: string[] = [];
-  const score = scoreValue(row, true);
-  if (row.metrics?.score_eligible === false) {
-    const gateReason = row.metrics?.score_exclusion_reason || '通常スコア判定ゲート未達';
-    reasons.push(`通常ゲート対象外（管理者はゲート無視で算定）: ${gateReason}`);
-  } else {
-    reasons.push('通常スコア判定ゲート通過');
-  }
-  if (score !== null && score >= 22) reasons.push('条件整理点が相対的に高い水準');
+  if (!isScored(row)) reasons.push('出来高またはボラ条件未達のため条件判定対象外');
+  else reasons.push('出来高・ボラティリティ条件をクリア');
+  if (Number(row.score) >= 22) reasons.push('条件整理点が相対的に高い水準');
   if (tags.includes('決算直前注意')) reasons.push('決算直前のため注意');
   if (tags.includes('決算前除外')) reasons.push('決算前除外条件に該当');
   return Array.from(new Set(reasons)).slice(0, 3);
 }
 
 function fallbackMarketTone(rows: ResultRow[], isAdmin: boolean) {
-  const scored = rows.filter((r) => isScored(r, isAdmin));
-  const high = scored.filter((r) => Number(scoreValue(r, isAdmin)) >= 22).length;
+  const scored = rows.filter(isScored);
+  const high = scored.filter((r) => Number(r.score) >= 22).length;
   const risk = rows.filter((r) => visibleTags(r, isAdmin).some((t) => t.includes('イベント前確認') || t.includes('イベント確認') || t.includes('決算'))).length;
   const ratio = scored.length ? high / scored.length : 0;
   const score = ratio * 2 - Math.min(risk, 5) * 0.15;
@@ -559,6 +548,10 @@ function kabutanUrl(row: ResultRow) {
   return `https://kabutan.jp/stock/chart?code=${encodeURIComponent(String(row.code))}`;
 }
 
+function shikihoUrl(row: ResultRow) {
+  return `https://shikiho.toyokeizai.net/stocks/${encodeURIComponent(String(row.code).trim())}`;
+}
+
 function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; isAdmin: boolean }) {
   const tags = visibleTags(row, isAdmin);
   const status = statusOf(row, isAdmin);
@@ -570,11 +563,11 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         <StatusPill status={status} isAdmin={isAdmin} />
         <div className="stock-title"><b>{row.code}</b><span>{row.name || ''}</span></div>
         <div className="stock-numbers">
-          <span>条件整理点<b>{isScored(row, isAdmin) ? fmt(scoreValue(row, isAdmin)) : '-'}</b></span>
+          <span>条件整理点<b>{isScored(row) ? fmt(row.score) : '-'}</b></span>
           <span>株価:<b>{fmt(row.close)}</b></span>
         </div>
       </div>
-      <ScoreHistory row={row} isAdmin={isAdmin} />
+      <ScoreHistory row={row} />
       <AdminCategoryScoreHistory row={row} isAdmin={isAdmin} />
       <AdminTradeSimulation50d row={row} isAdmin={isAdmin} />
       <DividendLine row={row} isAdmin={isAdmin} />
@@ -586,6 +579,7 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
       <div className="stock-actions">
         {isAdmin ? <Link className="mini-btn" href={`/u/${userId}/score/${row.code}`}>詳細</Link> : null}
         <a className="mini-btn kabutan" href={kabutanUrl(row)} target="_blank" rel="noreferrer">株探</a>
+        <a className="mini-btn" href={shikihoUrl(row)} target="_blank" rel="noreferrer">四季報</a>
       </div>
     </article>
   );
@@ -648,7 +642,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   }
 
   const rows = data.rows || [];
-  const scoredRows = rows.filter((r) => isScored(r, isAdmin));
+  const scoredRows = rows.filter(isScored);
   const byStatus = (s: StatusKey) => rows.filter((r) => statusOf(r, isAdmin) === s);
   const lastUpdated = formatJst(data.run?.finished_at || data.run?.started_at);
   const fallbackTone = fallbackMarketTone(rows, isAdmin);
@@ -696,13 +690,13 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           <div><span>{isAdmin ? '確認優先' : '条件一致銘柄'}</span><b>{byStatus('WATCH_PRIORITY').length}</b></div>
           <div><span>イベント確認</span><b>{eventCautionCount}</b></div>
           <div><span>イベント前確認</span><b>{eventBeforeCount}</b></div>
-          <div><span>{isAdmin ? 'スコア算定不可' : '参考確認'}</span><b>{outRows.length}</b></div>
+          <div><span>{isAdmin ? '条件判定対象外' : '参考確認'}</span><b>{outRows.length}</b></div>
         </section>
 
         <Section title={isAdmin ? '確認優先銘柄' : '条件一致銘柄'} subtitle="あらかじめ定めた条件への一致が相対的に多い銘柄です。" rows={byStatus('WATCH_PRIORITY')} userId={userId} isAdmin={isAdmin} />
         <Section title="通常確認" subtitle="登録銘柄のうち、通常確認として整理されている銘柄です。" rows={byStatus('WATCH_LIST')} userId={userId} isAdmin={isAdmin} />
         <Section title="イベント確認・確認" subtitle="決算日や開示情報などのイベント確認が必要な銘柄です。" rows={[...byStatus('EARNINGS_CAUTION'), ...byStatus('EARNINGS_EXCLUDE')]} userId={userId} isAdmin={isAdmin} />
-        <Section title={isAdmin ? 'スコア算定不可' : '参考確認'} subtitle={isAdmin ? '株価データ不足などにより管理者用スコアも算定できない銘柄です。' : '条件判定対象外または参考確認として整理されている銘柄です。'} rows={outRows} userId={userId} isAdmin={isAdmin} />
+        <Section title={isAdmin ? '条件判定対象外' : '参考確認'} subtitle="条件判定対象外または参考確認として整理されている銘柄です。" rows={outRows} userId={userId} isAdmin={isAdmin} />
 
         <section className="section guide-section">
           <h2>確認の流れ</h2>
