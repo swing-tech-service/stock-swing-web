@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Papa from 'papaparse';
+import TradeReview from './TradeReview';
+import AdminAnalysis from './AdminAnalysis';
 
 type CsvRow = { code?: string; Code?: string; 銘柄コード?: string; name?: string; Name?: string; 銘柄名?: string };
 type WatchRow = { code: string; name?: string | null; memo?: string | null; is_active?: boolean | null; updated_at?: string | null };
@@ -117,6 +119,8 @@ export default function Admin() {
           </>
         )}
       </section>
+      {unlocked && userId === 'takashimasaakiadmin' ? <AdminAnalysis userId={userId} adminKey={adminKey} /> : null}
+      {unlocked && userId === 'takashimasaakiadmin' ? <TradeReview key={`${userId}:${adminKey}`} userId={userId} adminKey={adminKey} /> : null}
     </main>
   );
 }
