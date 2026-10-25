@@ -9,6 +9,7 @@ function load(file, deps, extras = {}) {
   const box = { exports: {}, require: name => deps[name], ...extras };
   vm.runInNewContext(code, box); return box.exports;
 }
+const privacy = load('lib/publicScore.ts', {});
 const validation = load('lib/tradeReview.ts', {});
 const valid = { code: '4221', buy_date: '2024-06-12', sell_date: '2024-07-12', buy_amount: '10000', sell_amount: '11000' };
 test('valid code, same-day trade and decimals', () => {
@@ -18,19 +19,20 @@ test('valid code, same-day trade and decimals', () => {
 for (const change of [{code:'4221;bad'}, {buy_date:'2024-02-30'}, {buy_date:'1999-12-31'}, {sell_date:'2026-10-08'}, {sell_date:'2023-01-01'}, {buy_amount:'0'}, {buy_amount:'NaN'}, {buy_amount:'1e3'}, {buy_amount:'-1'}, {sell_amount:'1.001'}]) {
   test(`reject ${JSON.stringify(change)}`, () => assert.throws(() => validation.validateTrade({...valid,...change}, '2026-10-08')));
 }
-function route({ user = { id:'takashimasaakiadmin', status:'active', admin_key:'secret' }, dispatch = true, dispatchStatus=403, env={} } = {}) {
+function route({ user = { id:'takashimasaakiadmin', status:'active', admin_key:'secret' }, dispatch = true, dispatchStatus=403, env={}, history=[] } = {}) {
   const calls = [];
   const db = { from(table) {
     const call = {table, ops:[]}; calls.push(call);
     const q = {};
     for (const method of ['select','eq','order','limit','insert','update','in','lt','single','maybeSingle']) q[method] = (...args) => {call.ops.push([method,...args]); return q;};
-    q.then = (resolve, reject) => Promise.resolve({ data: table === 'app_users' ? user : call.ops.some(o => o[0] === 'insert') ? {id:'job-uuid'} : [], error:null }).then(resolve,reject);
+    q.then = (resolve, reject) => Promise.resolve({ data: table === 'app_users' ? user : call.ops.some(o => o[0] === 'insert') ? {id:'job-uuid'} : history, error:null }).then(resolve,reject);
     return q;
   }};
   const mod = load('app/api/admin/trade-review/route.ts', {
     'next/server': { NextResponse: {json: (body, opts) => ({body,...opts})} },
     '../../../../lib/supabaseServer': {supabaseAdmin: () => db},
     '../../../../lib/tradeReview': validation,
+    '../../../../lib/publicScore': privacy,
   }, {process:{env:{GITHUB_ACTIONS_TOKEN:'test-token',...env}}, Intl, Date, AbortSignal,
     fetch: async (url, opts) => {calls.push({url, payload:JSON.parse(opts.body)}); return {ok:dispatch,status:dispatchStatus};} });
   return {calls, post: body => mod.POST({json: async () => body})};
@@ -70,4 +72,12 @@ test('legacy dedicated ref and whitespace do not change other workflows',async()
  const r=route({env:{GITHUB_ACTIONS_TOKEN:' test-token \n',GITHUB_REF:'other-daily-branch',TRADE_REVIEW_REF:' main \n'}});
  await r.post({...valid,userId:'takashimasaakiadmin',adminKey:'secret',action:'create'});
  assert.equal(r.calls.find(c=>c.url).payload.ref,'main');
+});
+
+test('cached legacy history never exposes rules or arbitrary fields',async()=>{
+ const secret={score_points:{c01:5},windows:{buy:{rows:[{date:'2024-01-01',offset:0,score:5,close:100,conditions:{c01:true},reason:'SECRET_RULE',unknown:'SECRET_RULE'}]}}};
+ const r=route({history:[{id:'job',result:secret}]});
+ const result=await r.post({userId:'takashimasaakiadmin',adminKey:'secret',action:'list'});
+ assert.equal(result.status,200);assert.ok(!JSON.stringify(result.body).includes('SECRET_RULE'));assert.ok(!JSON.stringify(result.body).includes('score_points'));
+ assert.deepEqual(Object.keys(result.body.jobs[0].result.windows.buy.rows[0]),['date','offset','close','score']);
 });

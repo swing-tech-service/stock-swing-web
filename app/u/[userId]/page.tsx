@@ -196,48 +196,6 @@ function ScoreHistory({ row }: { row: ResultRow }) {
 }
 
 
-function categoryHistory(row: ResultRow) {
-  const h = row.metrics?.score_category_history_10d;
-  return Array.isArray(h) ? h : [];
-}
-
-function groupScore(h: any, key: string) {
-  const v = h?.groups?.[key]?.score;
-  return typeof v === 'number' ? v : '-';
-}
-
-function AdminCategoryScoreHistory({ row, isAdmin }: { row: ResultRow; isAdmin: boolean }) {
-  if (!isAdmin) return null;
-  const history = categoryHistory(row);
-  if (!history.length) return null;
-  return (
-    <div className="admin-cat-history" aria-label="カテゴリ別スコア推移">
-      <div className="admin-cat-history-title">10日カテゴリスコア</div>
-      <div className="admin-cat-history-scroll">
-        <table>
-          <thead>
-            <tr><th>日付</th><th>総</th><th>MA</th><th>BB</th><th>MACD</th><th>RSI</th><th>雲</th></tr>
-          </thead>
-          <tbody>
-            {history.map((h: any, i: number) => (
-              <tr key={`${h.date || i}-${i}`}>
-                <td>{shortDate(h.date) || '-'}</td>
-                <td>{typeof h.score === 'number' ? h.score : '-'}</td>
-                <td>{groupScore(h, 'ma')}</td>
-                <td>{groupScore(h, 'bb')}</td>
-                <td>{groupScore(h, 'macd')}</td>
-                <td>{groupScore(h, 'rsi')}</td>
-                <td>{groupScore(h, 'cloud')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-
 function pctText(value: any) {
   if (value === null || value === undefined || value === '') return '-';
   const n = Number(value);
@@ -565,7 +523,6 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
         </div>
       </div>
       <ScoreHistory row={row} />
-      <AdminCategoryScoreHistory row={row} isAdmin={isAdmin} />
       <AdminTradeSimulation50d row={row} isAdmin={isAdmin} />
       <DividendLine row={row} isAdmin={isAdmin} />
       <div className="stock-tags">

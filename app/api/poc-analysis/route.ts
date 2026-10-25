@@ -1,3 +1,4 @@
+import { publicScoreResult } from '../../../lib/publicScore';
 import { createHash, timingSafeEqual } from 'crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
@@ -67,7 +68,10 @@ export async function POST(req: Request) {
       p_buy: b.action === 'create' ? b.buy_date : null, p_sell: b.action === 'create' ? b.sell_date : null,
     });
     if (error || !data) return reply({ error: '分析サービスに接続できません。要求IDを変えず再確認してください' }, 503);
-    const { _wake_worker, ...output } = data;
+    const { _wake_worker, result: rawResult } = data;
+    const output = {remaining:data.remaining,role:data.role,request_id:data.request_id,status:data.status,
+      expires_at:data.expires_at,error_message:data.error_message,error:data.error,http:data.http,
+      ...(rawResult !== undefined ? {result:publicScoreResult(rawResult)} : {})};
     // Wake only for a newly created calculation. Cache hits and retries never dispatch.
     // The schedule drains the durable queue when dispatch cannot be confirmed.
     const token=(process.env.POC_ANALYSIS_GITHUB_TOKEN || process.env.GITHUB_ACTIONS_TOKEN || process.env.GITHUB_TOKEN_FOR_DISPATCH || '').trim();

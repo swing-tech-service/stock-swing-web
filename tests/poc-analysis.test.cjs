@@ -1,10 +1,11 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
 const ts=require('typescript'),{randomUUID}=require('node:crypto');
+const privacyBox={exports:{}}; vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/publicScore.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,privacyBox);
 function setup({env={},rpcResult={data:{remaining:2,status:'queued'}},throws=false,adminStatus='active',mode='admin',dispatchStatus=204}={}) {
  const calls=[];
  const code=ts.transpileModule(fs.readFileSync('app/api/poc-analysis/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const sandbox={exports:{},Buffer,Date,Intl,AbortSignal,fetch:async(url,opts)=>{calls.push({url,payload:JSON.parse(opts.body)});return{ok:dispatchStatus===204,status:dispatchStatus};},process:{env:{POC_ANALYSIS_ENABLED:'true',POC_ANALYSIS_ORIGIN:'https://test.example',...env}},
- require:n=>n==='crypto'?require('node:crypto'):n==='next/server'?{NextResponse:{json:(data,options)=>({data,...options})}}:
+ require:n=>n==='../../../lib/publicScore'?privacyBox.exports:n==='crypto'?require('node:crypto'):n==='next/server'?{NextResponse:{json:(data,options)=>({data,...options})}}:
  {supabaseAdmin:()=>({from:(table)=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:table==='app_users'?{id:'takashimasaakiadmin',admin_key:'admin-secret',status:adminStatus}:{mode}})})})}),rpc:async(name,args)=>{calls.push({name,args});if(throws)throw Error('secret');return rpcResult;}})}};
  vm.runInNewContext(code,sandbox);
  const post=(body,headers={})=>sandbox.exports.POST(new Request('https://test.example/api/poc-analysis',{
@@ -80,4 +81,12 @@ test('admin availability provides setup/stop reason without leaking configuratio
 test('dedicated analysis token works without changing the shared daily token',async()=>{
  const {post,calls}=setup({env:{POC_ANALYSIS_GITHUB_TOKEN:' feature-only-token '},rpcResult:{data:{remaining:2,status:'queued',_wake_worker:true}}});
  assert.equal((await post(valid())).status,202);assert.equal(calls.filter(c=>c.url).length,1);
+});
+
+for(const action of ['create','status'])for(const admin of [false,true])test('no rule details in cached '+action+' admin='+admin,async()=>{
+ const rpcResult={data:{remaining:2,status:'success',result:{score_points:{SECRET:10},windows:{buy:{rows:[{date:'2024-01-01',offset:0,score:10,close:100,conditions:{SECRET:true},reason:'SECRET',chart:'SECRET'}],chart_rows:[{SECRET:1}]}}}}};
+ const {post}=setup({rpcResult});const b=valid();b.action=action;
+ if(admin)Object.assign(b,{user:'takashimasaakiadmin',target:'takashimasaakiadmin',adminKey:'admin-secret'});
+ const r=await post(b);assert.equal(r.status,200);assert.ok(!JSON.stringify(r.data).includes('SECRET'));assert.ok(!JSON.stringify(r.data).includes('score_points'));
+ assert.deepEqual(Object.keys(r.data.result.windows.buy.rows[0]),['date','offset','close','score']);
 });

@@ -1,20 +1,11 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabaseServer';
 
-const FORBIDDEN_TAG_WORDS = ['損切り', '利確', '目標株価', 'エントリー', '推奨', '買い候補', '急騰候補', '有望株'];
-const FORBIDDEN_METRIC_KEYS = new Set(['stop_loss_reference', 'stop_loss_distance_pct', 'take_profit_20pct', 'rr_stop_candidate', 'rr_target_candidate', 'rr2_entry_price', 'target_price']);
+// No scoring rules or per-condition metrics leave this endpoint.
 
 function sanitizeRow(row: any) {
-  const metrics: Record<string, any> = { ...(row.metrics || {}) };
-  for (const key of Object.keys(metrics)) {
-    if (FORBIDDEN_METRIC_KEYS.has(key) || key.includes('stop_loss') || key.includes('take_profit') || key.includes('target_price') || key.startsWith('rr_')) {
-      delete metrics[key];
-    }
-  }
-  const tags = Array.isArray(row.tags) ? row.tags.filter((t: any) => !FORBIDDEN_TAG_WORDS.some((w) => String(t).includes(w))) : row.tags;
-  return { ...row, tags, metrics };
+  return {id:row.id,code:row.code,name:row.name,score:row.score,close:row.close,kabutan_url:row.kabutan_url};
 }
-
 
 export async function GET(_req: Request, { params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
@@ -49,5 +40,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ userId:
     return String(a.code).localeCompare(String(b.code), 'ja');
   });
 
-  return NextResponse.json({ run, rows: rows.map(sanitizeRow) });
+  return NextResponse.json({run:{id:run.id,started_at:run.started_at,finished_at:run.finished_at,status:run.status},rows:rows.map(sanitizeRow)},{headers:{'Cache-Control':'private, no-store'}});
 }
