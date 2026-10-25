@@ -65,6 +65,7 @@ export default function PocAnalysis({ target, initialUser = '', adminKey }: { ta
       <button className="mini-btn" onClick={()=>{setKey('');setData(null);request.current=null;}}>{isAdmin?'結果を消去':'キー・結果を消去'}</button>
       {error && <p role="alert">{error}</p>}
       {data && <div aria-live="polite"><p>本日の残り: {data.remaining}回 / 権限: {data.role}</p>
+        {data.worker_notice && <p role="status">{data.worker_notice}</p>}
         <p>状態: {({queued:'受付済み',running:'分析中',success:'完了',failed:'失敗',expired:'期限切れ'} as any)[data.status] || '待機中'}</p>
         {data.error_message && <p>{data.error_message}</p>}
         {data.expires_at && <p>結果の期限: {new Date(data.expires_at).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})} 日本時間</p>}

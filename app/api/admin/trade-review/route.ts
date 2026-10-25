@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
       input = validateTrade(body, today);
     } catch (e) { return reply({ error: e instanceof Error ? e.message : '入力エラー' }, 400); }
-    const token = process.env.GITHUB_ACTIONS_TOKEN || process.env.GITHUB_TOKEN_FOR_DISPATCH;
+    const token = (process.env.POC_ANALYSIS_GITHUB_TOKEN || process.env.GITHUB_ACTIONS_TOKEN || process.env.GITHUB_TOKEN_FOR_DISPATCH || '').trim();
     if (!token) return reply({ error: 'GitHub Actions用トークンが未設定です' }, 503);
     // An interrupted Action cannot leave the user permanently locked out.
     const expired = await db.from('trade_review_jobs').update({ status: 'failed', error_message: '30分以内に完了しませんでした。再実行してください。', finished_at: new Date().toISOString() })
@@ -43,10 +43,11 @@ export async function POST(req: Request) {
     if (pending.data?.length) return reply({ error: '実行中の検証があります。履歴を更新してください（30分経過後は再実行可能）' }, 409);
     const saved = await db.from('trade_review_jobs').insert({ user_id: userId, ...input }).select('id').single();
     if (saved.error || !saved.data) return reply({ error: '検証を登録できませんでした。SQL適用または実行中の検証を確認してください' }, 409);
-    const owner = process.env.GITHUB_OWNER || 'swing-tech-service';
-    const repo = process.env.GITHUB_CORE_REPO || 'stock-swing-core';
-    const ref = process.env.GITHUB_REF || 'main';
+    const owner = process.env.GITHUB_OWNER?.trim() || 'swing-tech-service';
+    const repo = process.env.GITHUB_CORE_REPO?.trim() || 'stock-swing-core';
+    const ref = process.env.TRADE_REVIEW_REF?.trim() || process.env.GITHUB_REF?.trim() || 'main';
     let dispatched = false;
+    let dispatchReason = 'GitHubへの通信失敗・タイムアウト';
     try {
       const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/trade_review.yml/dispatches`, {
         method: 'POST', signal: AbortSignal.timeout(15000),
@@ -54,10 +55,14 @@ export async function POST(req: Request) {
         body: JSON.stringify({ ref, inputs: { job_id: saved.data.id } }),
       });
       dispatched = response.ok;
+      if(!response.ok) {
+        const causes: Record<number,string> = {401:'GitHubトークンの無効・期限切れ',403:'GitHubトークンのActions実行権限を確認',404:'リポジトリ・trade_review.ymlの存在とトークンの対象リポジトリを確認',422:'起動先ブランチとjob_id入力を確認'};
+        dispatchReason=`GitHub HTTP ${response.status}: ${causes[response.status] || 'GitHub設定を確認'}`;
+      }
     } catch { /* The claim/status guard makes a late dispatch harmless. */ }
     if (!dispatched) {
-      const failed = await db.from('trade_review_jobs').update({ status: 'failed', error_message: 'Actions起動を確認できませんでした。設定・権限を確認してください。', finished_at: new Date().toISOString() }).eq('id', saved.data.id).eq('status', 'queued');
-      return reply({ error: failed.error ? 'Actions起動・状態保存を確認できませんでした。履歴を更新してください' : 'Actions起動を確認できませんでした。履歴とGitHub設定を確認してください' }, 502);
+      const failed = await db.from('trade_review_jobs').update({ status: 'failed', error_message: `Actions起動を確認できませんでした。${dispatchReason}`, finished_at: new Date().toISOString() }).eq('id', saved.data.id).eq('status', 'queued');
+      return reply({ error: failed.error ? 'Actions起動・状態保存を確認できませんでした。履歴を更新してください' : `Actions起動を確認できませんでした。${dispatchReason}`, id:saved.data.id }, 502);
     }
     return reply({ id: saved.data.id, message: '検証を受け付けました。数分後に履歴を更新してください。' }, 202);
   } catch { return reply({ error: '過去検証サービスに接続できませんでした' }, 503); }
