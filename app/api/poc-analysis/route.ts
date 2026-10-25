@@ -7,11 +7,11 @@ export const dynamic = 'force-dynamic';
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status,
   headers: { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' } });
 export async function POST(req: Request) {
-  if (process.env.POC_ANALYSIS_ENABLED === 'false') return reply({ error: '分析は現在停止中です' }, 503);
+  if (process.env.POC_ANALYSIS_ENABLED?.trim() === 'false') return reply({ error: '分析は現在停止中です' }, 503);
   try {
     if (!req.headers.get('content-type')?.startsWith('application/json')) return reply({ error: 'JSONが必要です' }, 415);
     // Browser-only same-origin entry point. No URL keys, permissive CORS or GET side effects.
-    const expected = process.env.POC_ANALYSIS_ORIGIN || new URL(req.url).origin;
+    const expected = process.env.POC_ANALYSIS_ORIGIN?.trim().replace(/\/+$/, '') || new URL(req.url).origin;
     if (!expected || req.headers.get('origin') !== expected) return reply({ error: '送信元を確認してください' }, 403);
     const reader = req.body?.getReader();
     if (!reader) return reply({ error: '入力が必要です' }, 400);
@@ -44,7 +44,8 @@ export async function POST(req: Request) {
     if(b.action==='availability') {
       if(!isAdmin) return reply({error:'管理者認証が必要です'},403);
       const setting=await db.from('poc_analysis_rollout').select('mode').eq('singleton',true).maybeSingle();
-      return reply({available:!setting.error && ['admin','u001'].includes(setting.data?.mode)});
+      const available=!setting.error && ['admin','u001'].includes(setting.data?.mode);
+      return reply({available,...(!available?{reason:setting.error?'分析用SQLが未適用、または設定の取得に失敗しました。20261025_poc_analysis_admin_rollout.sqlの適用を確認してください。':setting.data?.mode==='off'?'分析は公開設定で停止中です。':'分析の公開設定がありません。追加SQLの適用を確認してください。'}:{})});
     }
     if (!['create','status'].includes(b.action)) return reply({ error: '操作が不正です' }, 400);
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -69,18 +70,20 @@ export async function POST(req: Request) {
     const { _wake_worker, ...output } = data;
     // Wake only for a newly created calculation. Cache hits and retries never dispatch.
     // The schedule drains the durable queue when dispatch cannot be confirmed.
-    const token=process.env.GITHUB_ACTIONS_TOKEN || process.env.GITHUB_TOKEN_FOR_DISPATCH;
+    const token=(process.env.POC_ANALYSIS_GITHUB_TOKEN || process.env.GITHUB_ACTIONS_TOKEN || process.env.GITHUB_TOKEN_FOR_DISPATCH || '').trim();
+    let workerNotice: string | undefined;
     if(_wake_worker === true && token) {
-      const owner=process.env.GITHUB_OWNER || 'swing-tech-service';
-      const repo=process.env.GITHUB_CORE_REPO || 'stock-swing-core';
+      const owner=process.env.GITHUB_OWNER?.trim() || 'swing-tech-service';
+      const repo=process.env.GITHUB_CORE_REPO?.trim() || 'stock-swing-core';
       try {
-        await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/poc_analysis.yml/dispatches`, {
+        const response=await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/actions/workflows/poc_analysis.yml/dispatches`, {
           method:'POST',signal:AbortSignal.timeout(5000),
           headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'},
-          body:JSON.stringify({ref:process.env.GITHUB_REF || 'main'}),
+          body:JSON.stringify({ref:process.env.POC_ANALYSIS_REF?.trim() || 'main'}),
         });
-      } catch { /* Scheduled polling remains the fallback; never re-count a durable request. */ }
+        if(!response.ok) workerNotice=`受付は保存済みです。即時起動は確認できませんでした（GitHub HTTP ${response.status}）。定期処理を待つか、管理者がPoC analysis queueを手動実行してください。`;
+      } catch { workerNotice='受付は保存済みです。即時起動の通信に失敗しました。定期処理を待つか、管理者がPoC analysis queueを手動実行してください。'; }
     }
-    return reply(output, data.http || (data.status === 'queued' || data.status === 'running' ? 202 : 200));
+    return reply({...output,...(workerNotice?{worker_notice:workerNotice}:{})}, data.http || (data.status === 'queued' || data.status === 'running' ? 202 : 200));
   } catch { return reply({ error: '分析サービスに接続できません。時間をおいて再確認してください' }, 503); }
 }

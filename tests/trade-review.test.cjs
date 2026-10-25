@@ -18,7 +18,7 @@ test('valid code, same-day trade and decimals', () => {
 for (const change of [{code:'4221;bad'}, {buy_date:'2024-02-30'}, {buy_date:'1999-12-31'}, {sell_date:'2026-10-08'}, {sell_date:'2023-01-01'}, {buy_amount:'0'}, {buy_amount:'NaN'}, {buy_amount:'1e3'}, {buy_amount:'-1'}, {sell_amount:'1.001'}]) {
   test(`reject ${JSON.stringify(change)}`, () => assert.throws(() => validation.validateTrade({...valid,...change}, '2026-10-08')));
 }
-function route({ user = { id:'takashimasaakiadmin', status:'active', admin_key:'secret' }, dispatch = true } = {}) {
+function route({ user = { id:'takashimasaakiadmin', status:'active', admin_key:'secret' }, dispatch = true, dispatchStatus=403, env={} } = {}) {
   const calls = [];
   const db = { from(table) {
     const call = {table, ops:[]}; calls.push(call);
@@ -31,8 +31,8 @@ function route({ user = { id:'takashimasaakiadmin', status:'active', admin_key:'
     'next/server': { NextResponse: {json: (body, opts) => ({body,...opts})} },
     '../../../../lib/supabaseServer': {supabaseAdmin: () => db},
     '../../../../lib/tradeReview': validation,
-  }, {process:{env:{GITHUB_ACTIONS_TOKEN:'test-token'}}, Intl, Date, AbortSignal,
-    fetch: async (url, opts) => {calls.push({url, payload:JSON.parse(opts.body)}); return {ok:dispatch};} });
+  }, {process:{env:{GITHUB_ACTIONS_TOKEN:'test-token',...env}}, Intl, Date, AbortSignal,
+    fetch: async (url, opts) => {calls.push({url, payload:JSON.parse(opts.body)}); return {ok:dispatch,status:dispatchStatus};} });
   return {calls, post: body => mod.POST({json: async () => body})};
 }
 test('missing auth makes no database access', async () => {
@@ -60,4 +60,14 @@ test('dispatch only passes job UUID, never key or amount', async () => {
 test('dispatch rejection reports failure and marks queued job failed', async () => {
   const r=route({dispatch:false}); const result=await r.post({...valid,userId:'takashimasaakiadmin',adminKey:'secret',action:'create'});
   assert.equal(result.status,502); assert.ok(r.calls.at(-1).ops.some(o=>o[0]==='update' && o[1].status==='failed'));
+});
+
+for(const status of [401,403,404,422])test('legacy dispatch exposes safe HTTP cause '+status,async()=>{
+ const r=route({dispatch:false,dispatchStatus:status});const result=await r.post({...valid,userId:'takashimasaakiadmin',adminKey:'secret',action:'create'});
+ assert.equal(result.status,502);assert.ok(result.body.error.includes('HTTP '+status));assert.ok(!result.body.error.includes('test-token'));assert.equal(result.body.id,'job-uuid');
+});
+test('legacy dedicated ref and whitespace do not change other workflows',async()=>{
+ const r=route({env:{GITHUB_ACTIONS_TOKEN:' test-token \n',GITHUB_REF:'other-daily-branch',TRADE_REVIEW_REF:' main \n'}});
+ await r.post({...valid,userId:'takashimasaakiadmin',adminKey:'secret',action:'create'});
+ assert.equal(r.calls.find(c=>c.url).payload.ref,'main');
 });

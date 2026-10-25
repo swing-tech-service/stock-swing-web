@@ -120,7 +120,7 @@ export default function Admin() {
         )}
       </section>
       {unlocked && userId === 'takashimasaakiadmin' ? <AdminAnalysis userId={userId} adminKey={adminKey} /> : null}
-      {unlocked && userId === 'takashimasaakiadmin' ? <TradeReview key={`${userId}:${adminKey}`} userId={userId} adminKey={adminKey} /> : null}
+      {unlocked && userId === 'takashimasaakiadmin' ? <details className="section"><summary>旧版の検証・過去履歴（通常は上の「銘柄分析」を使用）</summary><TradeReview key={`${userId}:${adminKey}`} userId={userId} adminKey={adminKey} /></details> : null}
     </main>
   );
 }
