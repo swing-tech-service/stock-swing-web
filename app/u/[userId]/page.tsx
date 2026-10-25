@@ -1,3 +1,4 @@
+import PocAnalysisGate from './PocAnalysisGate';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 import { validatePocAccess } from '../../../lib/pocAccess';
 import Link from 'next/link';
@@ -548,10 +549,6 @@ function kabutanUrl(row: ResultRow) {
   return `https://kabutan.jp/stock/chart?code=${encodeURIComponent(String(row.code))}`;
 }
 
-function shikihoUrl(row: ResultRow) {
-  return `https://shikiho.toyokeizai.net/stocks/${encodeURIComponent(String(row.code).trim())}`;
-}
-
 function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; isAdmin: boolean }) {
   const tags = visibleTags(row, isAdmin);
   const status = statusOf(row, isAdmin);
@@ -579,7 +576,6 @@ function StockRow({ row, userId, isAdmin }: { row: ResultRow; userId: string; is
       <div className="stock-actions">
         {isAdmin ? <Link className="mini-btn" href={`/u/${userId}/score/${row.code}`}>詳細</Link> : null}
         <a className="mini-btn kabutan" href={kabutanUrl(row)} target="_blank" rel="noreferrer">株探</a>
-        <a className="mini-btn" href={shikihoUrl(row)} target="_blank" rel="noreferrer">四季報</a>
       </div>
     </article>
   );
@@ -666,6 +662,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           <p>特定の銘柄の売買を推奨するものではありません。</p>
           <p>最終的な投資判断はご自身で行ってください。</p>
         </section>
+        <PocAnalysisGate target={userId} initialUser={queryUser || ''} />
         {errorMessage ? <div className="alert">エラー: {errorMessage}</div> : null}
 
         <section className="market-panel market-panel-v2">

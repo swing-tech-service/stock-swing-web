@@ -1,0 +1,11 @@
+
+# Generated files and private deployment settings
+node_modules/
+.next/
+.vercel/
+.env*
+__pycache__/
+*.pyc
+*.tsbuildinfo
+.venv*/
+poc_claim.json
