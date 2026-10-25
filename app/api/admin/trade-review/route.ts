@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../../lib/supabaseServer';
+import { publicScoreResult } from '../../../../lib/publicScore';
 import { validateTrade } from '../../../../lib/tradeReview';
 
 export const runtime = 'nodejs';
@@ -24,7 +25,9 @@ export async function POST(req: Request) {
     if (body.action === 'list') {
       const rows = await db.from('trade_review_jobs').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10);
       if (rows.error) return reply({ error: '履歴取得に失敗しました。SQL適用を確認してください' }, 503);
-      return reply({ jobs: rows.data });
+      return reply({ jobs: (rows.data || []).map(job => ({id:job.id,code:job.code,
+        buy_date:job.buy_date,sell_date:job.sell_date,buy_amount:job.buy_amount,sell_amount:job.sell_amount,
+        status:job.status,created_at:job.created_at,error_message:job.error_message,result:publicScoreResult(job.result)})) });
     }
     if (body.action !== 'create') return reply({ error: '不正な操作です' }, 400);
     let input;

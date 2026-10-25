@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 
-type Row = { date: string; offset: number; score: number | null; close: number | null; reason: string };
+import { publicScoreResult, scoreCsv, type ScoreRow as Row } from '../../../lib/publicScore';
 export default function PocAnalysis({ target, initialUser = '', adminKey }: { target: string; initialUser?: string; adminKey?: string }) {
   const isAdmin = Boolean(adminKey);
   const [open,setOpen]=useState(false), [user,setUser]=useState(initialUser), [key,setKey]=useState('');
@@ -13,7 +13,7 @@ export default function PocAnalysis({ target, initialUser = '', adminKey }: { ta
     const response=await fetch('/api/poc-analysis',{ method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({user,target,...(isAdmin ? {adminKey} : {key}),...payload}), cache:'no-store' });
     const result=await response.json(); if (!response.ok) throw new Error(result.error || '接続に失敗しました');
-    return result;
+    return {...result, ...(result.result ? {result:publicScoreResult(result.result)} : {})};
   };
   const refresh = async () => {
     if (busy) return; setBusy(true); setError('');
@@ -48,7 +48,7 @@ export default function PocAnalysis({ target, initialUser = '', adminKey }: { ta
   return <section className="section">
     <button className="btn" onClick={()=>setOpen(!open)}>分析</button>
     {open && <div>
-      <h2>指定銘柄の売買振り返り</h2>
+      <h2>指定銘柄の売買振り返り</h2><p>買付日・売却日それぞれの10営業日前から5営業日後までを表示します。</p>
       <p>協力者1人につき日本時間で1日3回。キャッシュの利用・受付後の失敗も1回です。同じ要求の通信再試行は追加消費しません。通常は次の処理時刻から数分かかります。</p>
       <form onSubmit={submit} style={{display:'grid',gap:12,maxWidth:650}}>
         {!isAdmin && <><label>協力者ID<input value={user} onChange={e=>{setUser(e.target.value);setData(null);request.current=null;}} required autoComplete="off" /></label>
@@ -72,20 +72,21 @@ export default function PocAnalysis({ target, initialUser = '', adminKey }: { ta
         {data.result && <>
           <h3>銘柄 {data.result.code}</h3>
           {amount(buyAmount)&&amount(sellAmount)&&<p>概算損益: {(Number(sellAmount)-Number(buyAmount)).toLocaleString('ja-JP')}円</p>}
-          <p>データ: {data.result.source} / 算出: {data.result.calculated_at} / 履歴不足の項目は0点として集計します。</p>
+          <p>算出: {data.result.calculated_at}。当日・未来日の終値は表示しません。非取引日は補正しません。</p>
           {(['buy','sell'] as const).map(side=>{
             const rows:Row[]=data.result.windows?.[side]?.rows||[];
             const scores=rows.filter(r=>r.score!==null); const min=Math.min(0,...scores.map(r=>r.score!)), max=Math.max(1,...scores.map(r=>r.score!));
-            return <div key={side}><h3>{side==='buy'?'買付':'売却'}日前後の点数</h3>
+            return <div key={side}><h3>{side==='buy'?'買付':'売却'}日の点数（10営業日前〜5営業日後）</h3>
+              <button className="mini-btn" onClick={()=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([scoreCsv(rows)],{type:'text/csv;charset=utf-8'}));a.href=u;a.download=`analysis-${side}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}}>CSV出力</button>
               <svg viewBox="0 0 600 140" role="img" aria-label="点数推移（欠損は接続しません）" style={{width:'100%',maxWidth:650,background:'#f4f7fc'}}>
                 {rows.map((r,i)=>{ const x=20+i*560/Math.max(1,rows.length-1),y=120-100*((r.score??min)-min)/(max-min),p=rows[i-1];
                   return r.score===null?null:<g key={r.date}>{p&&p.score!==null&&<line x1={20+(i-1)*560/Math.max(1,rows.length-1)} y1={120-100*(p.score-min)/(max-min)} x2={x} y2={y} stroke="#245acc"/>}<circle cx={x} cy={y} r={r.offset===0?5:3} fill={r.offset===0?'#c34427':'#245acc'}/></g>;})}
               </svg>
-              <div style={{overflowX:'auto'}}><table><thead><tr><th>日付</th><th>営業日差</th><th>点数</th><th>終値</th><th>注記</th></tr></thead><tbody>
-                {rows.map(r=><tr key={r.date}><td>{r.date}</td><td>{r.offset===0?'当日':r.offset}</td><td>{r.score??'—'}</td><td>{r.close??'—'}</td><td>{r.reason}</td></tr>)}
+              <div style={{overflowX:'auto'}}><table><thead><tr><th>日付</th><th>位置</th><th>調整後終値</th><th>点数</th></tr></thead><tbody>
+                {rows.map(r=><tr key={r.date}><td>{r.date}</td><td>{r.offset===0?'入力日':`${r.offset>0?'+':''}${r.offset}営業日`}</td><td>{r.close??'—'}</td><td>{r.score??'判定不可'}</td></tr>)}
               </tbody></table></div></div>;
           })}
-          <button className="mini-btn" onClick={()=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([JSON.stringify(data.result,null,2)],{type:'application/json'}));a.href=u;a.download='analysis.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}}>結果JSONを保存</button>
+          <button className="mini-btn" onClick={()=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([JSON.stringify({buy:data.result.windows.buy.rows,sell:data.result.windows.sell.rows},null,2)],{type:'application/json'}));a.href=u;a.download='analysis.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}}>結果JSONを保存</button>
         </>}
       </div>}
     </div>}
