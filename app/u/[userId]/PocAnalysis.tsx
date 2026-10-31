@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { publicScoreResult, scoreCsv, type ScoreRow as Row } from '../../../lib/publicScore';
-export default function PocAnalysis({ target, initialUser = '', adminKey }: { target: string; initialUser?: string; adminKey?: string }) {
+export default function PocAnalysis({ target, initialUser = '', adminKey, heading }: { target: string; initialUser?: string; adminKey?: string; heading?: string }) {
   const isAdmin = Boolean(adminKey);
   const [open,setOpen]=useState(false), [user,setUser]=useState(initialUser), [key,setKey]=useState('');
   const [data,setData]=useState<any>(null), [error,setError]=useState(''), [busy,setBusy]=useState(false);
@@ -45,8 +45,9 @@ export default function PocAnalysis({ target, initialUser = '', adminKey }: { ta
       if(r.request_id) request.current.id=r.request_id; setData(r);
     } catch(e) {setError((e as Error).message);} finally {setBusy(false);}
   };
-  return <section className="section">
-    <button className="btn" onClick={()=>setOpen(!open)}>分析</button>
+  return <section className="section" aria-label={heading || '指定銘柄の売買振り返り'}>
+    {heading && <><h2>{heading}</h2><p>指定した銘柄の買付・売却日の点数を確認できます。協力者IDごとに1日3回（日本時間）まで利用できます。</p></>}
+    <button className="btn" type="button" aria-expanded={open} onClick={()=>setOpen(!open)}>分析</button>
     {open && <div>
       <h2>指定銘柄の売買振り返り</h2><p>買付日・売却日それぞれの10営業日前から5営業日後までを表示します。</p>
       <p>協力者1人につき日本時間で1日3回。キャッシュの利用・受付後の失敗も1回です。同じ要求の通信再試行は追加消費しません。通常は次の処理時刻から数分かかります。</p>

@@ -7,6 +7,6 @@ export default async function PocAnalysisGate({target,initialUser}:{target:strin
   try {
     const {data,error}=await supabaseAdmin().from('poc_analysis_rollout').select('mode').eq('singleton',true).maybeSingle();
     if(error || data?.mode !== 'u001') return null;
-    return <PocAnalysis target={target} initialUser={initialUser}/>;
+    return <PocAnalysis target={target} initialUser={initialUser} heading="銘柄分析"/>;
   } catch { return null; }
 }

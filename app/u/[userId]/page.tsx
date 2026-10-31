@@ -619,7 +619,6 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           <p>特定の銘柄の売買を推奨するものではありません。</p>
           <p>最終的な投資判断はご自身で行ってください。</p>
         </section>
-        <PocAnalysisGate target={userId} initialUser={queryUser || ''} />
         {errorMessage ? <div className="alert">エラー: {errorMessage}</div> : null}
 
         <section className="market-panel market-panel-v2">
@@ -666,6 +665,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           <p className="disclaimer">本ツールは外部データソースから取得した情報を利用しています。データの正確性、完全性、即時性、継続提供を保証するものではありません。</p>
           <div className="footer-links"><Link className="btn" href={`/u/${userId}/admin`}>登録銘柄CSV更新ページへ</Link></div>
         </section>
+        <PocAnalysisGate target={userId} initialUser={queryUser || ''} />
       </main>
     </>
   );
