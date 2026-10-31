@@ -1,5 +1,6 @@
 import { publicScoreResult } from '../../../lib/publicScore';
-import { createHash, timingSafeEqual } from 'crypto';
+import { timingSafeEqual } from 'crypto';
+import { verifyAnalysisSession, matchesSessionCredential } from '../../../lib/analysisSession';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '../../../lib/supabaseServer';
 
@@ -28,10 +29,11 @@ export async function POST(req: Request) {
     if (!b || typeof b !== 'object' || Array.isArray(b)) return reply({ error: '入力が不正です' }, 400);
     const db = supabaseAdmin();
     const validId = (s: unknown) => typeof s === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(s);
-    if (!validId(b.user) || !validId(b.target)) return reply({error:'本人ID・対象を確認してください'},403);
+    if (!validId(b.target)) return reply({error:'本人ID・対象を確認してください'},403);
     const isAdmin = typeof b.adminKey === 'string' && b.adminKey.trim().length > 0;
+    let user: string; let credentialHash = '';
     if(isAdmin) {
-      if(b.user !== 'takashimasaakiadmin' || b.target !== b.user || b.adminKey.length>256)
+      if(!validId(b.user) || b.user !== 'takashimasaakiadmin' || b.target !== b.user || b.adminKey.length>256)
         return reply({error:'管理者認証が必要です'},403);
       const auth=await db.from('app_users').select('id,admin_key,status').eq('id','takashimasaakiadmin').maybeSingle();
       if(auth.error) return reply({error:'管理者認証を確認できません'},503);
@@ -39,8 +41,19 @@ export async function POST(req: Request) {
       const supplied=Buffer.from(b.adminKey.trim()); const stored=Buffer.from(expectedKey);
       if(!auth.data || auth.data.status!=='active' || !expectedKey || supplied.length!==stored.length || !timingSafeEqual(supplied,stored))
         return reply({error:'管理者認証が必要です'},403);
-    } else if(typeof b.key!=='string' || b.key.length<16 || b.key.length>256) {
-      return reply({error:'協力者キーを確認してください'},403);
+      user=b.user;
+    } else {
+      const session=verifyAnalysisSession(b.session,b.target);
+      if(!session || (b.user !== undefined && b.user !== session.user))
+        return reply({error:'アクセス認証を確認できません。トップ画面を再読み込みしてください'},403);
+      const current=await db.from('poc_users').select('user_code,target_user_code,access_key_hash,is_active,role')
+        .eq('user_code',session.user).eq('target_user_code',session.target).maybeSingle();
+      if(current.error) return reply({error:'アクセス認証を確認できません。時間をおいて再確認してください'},503);
+      if(!current.data || current.data.user_code!==session.user || current.data.target_user_code!==session.target ||
+         !current.data.is_active || !['poc','admin'].includes(current.data.role) ||
+         !matchesSessionCredential(session,current.data.access_key_hash))
+        return reply({error:'アクセス認証を確認できません。トップ画面を再読み込みしてください'},403);
+      user=session.user; credentialHash=current.data.access_key_hash;
     }
     if(b.action==='availability') {
       if(!isAdmin) return reply({error:'管理者認証が必要です'},403);
@@ -62,14 +75,26 @@ export async function POST(req: Request) {
       if (!/^\d{3}[\dA-Z]$/.test(code) || !date(b.buy_date) || !date(b.sell_date) || b.sell_date < b.buy_date)
         return reply({ error: 'コード、昨日までの日付、買付日と売却日の順序を確認してください' }, 400);
     }
-    const { data, error } = await db.rpc('poc_analysis_access', {
-      p_user: b.user, p_target: b.target, p_hash: isAdmin ? '' : createHash('sha256').update(b.key).digest('hex'), p_admin: isAdmin,
+    const args = {
+      p_user: user, p_target: b.target, p_hash: credentialHash, p_admin: isAdmin,
       p_action: b.action, p_request: b.request_id ?? null, p_code: code,
       p_buy: b.action === 'create' ? b.buy_date : null, p_sell: b.action === 'create' ? b.sell_date : null,
-    });
+    };
+    // Check the deployed quota contract without reserving a request. An old SQL
+    // installation must never accept keyless requests before the global cap exists.
+    if (b.action === 'create') {
+      const policy = await db.rpc('poc_analysis_access', {...args,p_action:'status',p_request:null,p_code:null,p_buy:null,p_sell:null});
+      if (policy.error || !policy.data) return reply({error:'分析サービスに接続できません。要求IDを変えず再確認してください'},503);
+      if (policy.data.http >= 400) return reply({error:policy.data.error || '分析を利用できません'},policy.data.http);
+      if (!Number.isInteger(policy.data.global_remaining))
+        return reply({error:'分析の設定更新が必要です。管理者に連絡してください'},503);
+    }
+    const { data, error } = await db.rpc('poc_analysis_access', args);
     if (error || !data) return reply({ error: '分析サービスに接続できません。要求IDを変えず再確認してください' }, 503);
+    if (!data.error && !Number.isInteger(data.global_remaining))
+      return reply({error:'分析の設定更新が必要です。管理者に連絡してください'},503);
     const { _wake_worker, result: rawResult } = data;
-    const output = {remaining:data.remaining,role:data.role,request_id:data.request_id,status:data.status,
+    const output = {remaining:data.remaining,global_remaining:data.global_remaining,role:data.role,request_id:data.request_id,status:data.status,
       expires_at:data.expires_at,error_message:data.error_message,error:data.error,http:data.http,
       ...(rawResult !== undefined ? {result:publicScoreResult(rawResult)} : {})};
     // Wake only for a newly created calculation. Cache hits and retries never dispatch.
