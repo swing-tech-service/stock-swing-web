@@ -559,6 +559,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
   if (queryKey) returnQuery.set('key', queryKey);
   const returnPath = `/u/${encodeURIComponent(userId)}${returnQuery.toString() ? `?${returnQuery.toString()}` : ''}`;
 
+  let verifiedPocUser = '';
   if (!isAdmin) {
     const access = await validatePocAccess({ pathUserId: userId, queryUser: query.user, queryKey: query.key, path: `/u/${userId}` });
     if (!access.allowed) {
@@ -573,6 +574,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
         </>
       );
     }
+    verifiedPocUser = access.userCode || '';
   }
 
   const consentOk = await hasPocConsent(userId);
@@ -665,7 +667,7 @@ export default async function Dashboard({ params, searchParams }: { params: Prom
           <p className="disclaimer">本ツールは外部データソースから取得した情報を利用しています。データの正確性、完全性、即時性、継続提供を保証するものではありません。</p>
           <div className="footer-links"><Link className="btn" href={`/u/${userId}/admin`}>登録銘柄CSV更新ページへ</Link></div>
         </section>
-        <PocAnalysisGate target={userId} initialUser={queryUser || ''} />
+        <PocAnalysisGate target={userId} initialUser={verifiedPocUser} accessKey={typeof queryKey === 'string' ? queryKey.trim() : ''} />
       </main>
     </>
   );
